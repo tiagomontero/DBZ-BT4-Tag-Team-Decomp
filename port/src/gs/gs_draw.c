@@ -2498,48 +2498,54 @@ static void sub_apply_disp(float *mid, const float *a, const float *b) {
     }
 }
 
-/* Recursively emit one original triangle subdivided into 4^level triangles.
-   Vertices are NOT shared between adjacent original triangles of the strip, which
-   keeps the code simple and avoids seam cracks; shared vertices inside one original
-   triangle ARE shared between its 4 sub-triangles. */
-static void sub_emit_tri(const float *a, const float *b, const float *c, int level) {
-    if (level == 0) {
-        if (gsVuVertCount + 3 > MAX_VU_VERTS || gsVuIdxCount + 3 > MAX_VU_IDX) {
-            return; /* budget exhausted: drop this triangle */
-        }
-        uint32_t base = gsVuVertCount;
-        memcpy(&gsVuVerts[base * 12], a, 48);
-        memcpy(&gsVuVerts[(base + 1) * 12], b, 48);
-        memcpy(&gsVuVerts[(base + 2) * 12], c, 48);
-        gsVuVertCount += 3;
-        gsVuIdx[gsVuIdxCount++] = base;
-        gsVuIdx[gsVuIdxCount++] = base + 1;
-        gsVuIdx[gsVuIdxCount++] = base + 2;
-    } else {
-        float ab[12], bc[12], ca[12];
-        for (int k = 0; k < 12; k++) {
-            ab[k] = (a[k] + b[k]) * 0.5f;
-            bc[k] = (b[k] + c[k]) * 0.5f;
-            ca[k] = (c[k] + a[k]) * 0.5f;
-        }
-        if (sSubDisp > 0.0f) {
-            sub_apply_disp(ab, a, b);
-            sub_apply_disp(bc, b, c);
-            sub_apply_disp(ca, c, a);
-        }
-        sub_emit_tri(a, ab, ca, level - 1);
-        sub_emit_tri(ab, b, bc, level - 1);
-        sub_emit_tri(ca, bc, c, level - 1);
-        sub_emit_tri(ab, bc, ca, level - 1);
+/* Emit one sub-triangle (a, b, c) as an independent triangle: 3 vertices, 3 indices, no sharing. */
+static void sub_emit_tri(const float *a, const float *b, const float *c) {
+    if (gsVuVertCount + 3 > MAX_VU_VERTS || gsVuIdxCount + 3 > MAX_VU_IDX) {
+        return; /* budget exhausted: drop this triangle */
     }
+    uint32_t v0 = gsVuVertCount;
+    memcpy(&gsVuVerts[v0 * 12], a, 48);
+    uint32_t v1 = gsVuVertCount + 1;
+    memcpy(&gsVuVerts[v1 * 12], b, 48);
+    uint32_t v2 = gsVuVertCount + 2;
+    memcpy(&gsVuVerts[v2 * 12], c, 48);
+    gsVuIdx[gsVuIdxCount++] = v0;
+    gsVuIdx[gsVuIdxCount++] = v1;
+    gsVuIdx[gsVuIdxCount++] = v2;
+    gsVuVertCount += 3;
 }
 
-/* Worst-case vertices and indices one original triangle needs for `passes` passes. */
+/* Recursively emit one original triangle subdivided into 4^level sub-triangles. Each sub-triangle is
+   independent (no vertex sharing between siblings), which keeps the indices trivially correct. */
+static void sub_emit(const float *a, const float *b, const float *c, int level) {
+    if (level == 0) {
+        sub_emit_tri(a, b, c);
+        return;
+    }
+    float ab[12], bc[12], ca[12];
+    for (int k = 0; k < 12; k++) {
+        ab[k] = (a[k] + b[k]) * 0.5f;
+        bc[k] = (b[k] + c[k]) * 0.5f;
+        ca[k] = (c[k] + a[k]) * 0.5f;
+    }
+    if (sSubDisp > 0.0f) {
+        sub_apply_disp(ab, a, b);
+        sub_apply_disp(bc, b, c);
+        sub_apply_disp(ca, c, a);
+    }
+    sub_emit(a, ab, ca, level - 1);
+    sub_emit(ab, b, bc, level - 1);
+    sub_emit(ca, bc, c, level - 1);
+    sub_emit(ab, bc, ca, level - 1);
+}
+
+/* Worst-case vertices and indices one original triangle needs for `passes` passes: 4^passes sub-triangles,
+   each an independent triangle (3 verts / 3 indices). */
 static void sub_budget(int passes, uint32_t *verts, uint32_t *idx) {
-    if (passes <= 0) { *verts = 3; *idx = 3; return; }
-    uint32_t v = 6, i = 12; /* level 1: 6 verts / 12 idx */
-    for (int p = 2; p <= passes; p++) { v *= 4; i *= 4; }
-    *verts = v; *idx = i;
+    uint32_t t = 1;
+    for (int p = 0; p < passes; p++) t *= 4; /* 4^passes */
+    *verts = 3 * t;
+    *idx = 3 * t;
 }
 
 /* Vertex program 0 as a shader: one strip of the fighters' models (see shaders/vu0.vert and gs_vu1.c). The strip
@@ -2681,8 +2687,8 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                     continue;
                 }
             }
-            sub_emit_tri(&vertices[i * 12], &vertices[(i + 1) * 12],
-                         &vertices[(i + 2) * 12], passes);
+            sub_emit(&vertices[i * 12], &vertices[(i + 1) * 12],
+                     &vertices[(i + 2) * 12], passes);
         }
     } else {
         /* Original path: one triangle per strip cell, shared vertex buffer. */
