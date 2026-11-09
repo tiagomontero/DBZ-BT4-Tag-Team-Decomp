@@ -811,6 +811,24 @@ static int l_look(lua_State *L) {
         sLookBuild.rim_color = (unsigned)luaL_checkinteger(L, -1);
     }
     lua_pop(L, 1);
+    lua_getfield(L, 1, "subdiv");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.subdiv) {
+            sLookBuild.subdiv = n;
+        }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "jiggle");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.jiggle) {
+            sLookBuild.jiggle = n;
+        }
+    }
+    lua_pop(L, 1);
     return 0;
 }
 

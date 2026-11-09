@@ -181,6 +181,14 @@ static float sNudge; /* widescreen menus: moved this far across after the narrow
 static int sFillWide; /* widescreen menus: in parts 13..15 too, pieces as wide as the 4:3 screen reaching its bottom fill (the
                           versus menu's scenery; its windows, as wide, end above it) */
 static int sMenuFree; /* widescreen menus: the clip being drawn moves (markers 0x2D / 0x2E, gs_marker.c): not cut */
+
+/* BT4 visual mod: jiggle bone (resorte amortiguado sobre el hueso punta boneB). Un slot por llamada de dibujo
+   del frame; se reinicia en GsGpu_ListStart. Las llamadas de un frame se dan siempre en el mismo orden, así que
+   el índice de llamada es un identificador estable suficiente para recordar la posición del frame anterior. */
+#define JIGGLE_SLOTS 4096
+static int sJiggleIndex;
+static float sJigglePrev[JIGGLE_SLOTS][3];
+static float sJiggleVel[JIGGLE_SLOTS][3];
 /* A fight's HUD in a picture wider than 4:3 (setting hud_layout, BT3_HUD=<n> for a test):
      0  the side panels at the screen's edges (as since widescreen)
      1  the same, with the health bars drawn longer, up to the timer (hud_b.c, pull request #28)
@@ -278,6 +286,7 @@ void GsGpu_ListStart(void) {
     texture_cache_trim();
     menu_hd_trim(0);
     sMenuFree = 0;
+    sJiggleIndex = 0; /* BT4 visual mod: new jiggle state for this frame */
     gDrawStartNs = SDL_GetTicksNS(); /* (gs_gpu.c's clock, where it is compared) */
     gDrawTexNs = gDrawPipeNs = gDrawUpBytes = gDrawImgNs = gDrawLookNs = gDrawVuNs = gDrawXferNs = 0;
     gDrawNewTex = gDrawImgMade = gDrawImgFreed = gDrawImgPooled = 0;
@@ -2469,6 +2478,70 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
     gsDraws[gsDrawCount++] = d;
 }
 
+/* ----------------------------------------------------------------- BT4 visual mod: mesh subdivision helpers */
+
+/* Displacement strength applied to edge midpoints along their averaged normal, so
+   subdivision creates real curvature instead of just more flat triangles. */
+static float sSubDisp;
+
+/* Move an edge midpoint a little along the averaged normal of its two endpoints. */
+static void sub_apply_disp(float *mid, const float *a, const float *b) {
+    float nx = (a[4] + b[4]) * 0.5f;
+    float ny = (a[5] + b[5]) * 0.5f;
+    float nz = (a[6] + b[6]) * 0.5f;
+    float len = sqrtf(nx * nx + ny * ny + nz * nz);
+    if (len > 0.0001f) {
+        nx /= len; ny /= len; nz /= len;
+        mid[0] += nx * sSubDisp;
+        mid[1] += ny * sSubDisp;
+        mid[2] += nz * sSubDisp;
+    }
+}
+
+/* Recursively emit one original triangle subdivided into 4^level triangles.
+   Vertices are NOT shared between adjacent original triangles of the strip, which
+   keeps the code simple and avoids seam cracks; shared vertices inside one original
+   triangle ARE shared between its 4 sub-triangles. */
+static void sub_emit_tri(const float *a, const float *b, const float *c, int level) {
+    if (level == 0) {
+        if (gsVuVertCount + 3 > MAX_VU_VERTS || gsVuIdxCount + 3 > MAX_VU_IDX) {
+            return; /* budget exhausted: drop this triangle */
+        }
+        uint32_t base = gsVuVertCount;
+        memcpy(&gsVuVerts[base * 12], a, 48);
+        memcpy(&gsVuVerts[(base + 1) * 12], b, 48);
+        memcpy(&gsVuVerts[(base + 2) * 12], c, 48);
+        gsVuVertCount += 3;
+        gsVuIdx[gsVuIdxCount++] = base;
+        gsVuIdx[gsVuIdxCount++] = base + 1;
+        gsVuIdx[gsVuIdxCount++] = base + 2;
+    } else {
+        float ab[12], bc[12], ca[12];
+        for (int k = 0; k < 12; k++) {
+            ab[k] = (a[k] + b[k]) * 0.5f;
+            bc[k] = (b[k] + c[k]) * 0.5f;
+            ca[k] = (c[k] + a[k]) * 0.5f;
+        }
+        if (sSubDisp > 0.0f) {
+            sub_apply_disp(ab, a, b);
+            sub_apply_disp(bc, b, c);
+            sub_apply_disp(ca, c, a);
+        }
+        sub_emit_tri(a, ab, ca, level - 1);
+        sub_emit_tri(ab, b, bc, level - 1);
+        sub_emit_tri(ca, bc, c, level - 1);
+        sub_emit_tri(ab, bc, ca, level - 1);
+    }
+}
+
+/* Worst-case vertices and indices one original triangle needs for `passes` passes. */
+static void sub_budget(int passes, uint32_t *verts, uint32_t *idx) {
+    if (passes <= 0) { *verts = 3; *idx = 3; return; }
+    uint32_t v = 6, i = 12; /* level 1: 6 verts / 12 idx */
+    for (int p = 2; p <= passes; p++) { v *= 4; i *= 4; }
+    *verts = v; *idx = i;
+}
+
 /* Vertex program 0 as a shader: one strip of the fighters' models (see shaders/vu0.vert and gs_vu1.c). The strip
    becomes a triangle list of the program's own 48-byte vertices; the constants go into a uniform block. */
 void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, const float *consts) {
@@ -2510,23 +2583,97 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     if (depth_frac()) { u.misc[2] = -u.misc[2]; }
     u.misc[3] = (float)layer;
     u.light2[0] = consts[41]; u.light2[1] = consts[45]; u.light2[2] = consts[49]; u.light2[3] = consts[53];
+    /* BT4 visual mod: jiggle bone (resorte amortiguado sobre el hueso punta boneB). Laga el hueso punta detrás
+       del padre, creando movimiento secundario en ropa y pelo. Sólo capas de luchador (0, 1). */
+    if (Mods_Look()->jiggle > 0 && (layer == 0 || layer == 1) && sJiggleIndex < JIGGLE_SLOTS) {
+        int slot = sJiggleIndex++;
+        float *prev = sJigglePrev[slot];
+        float *vel = sJiggleVel[slot];
+        float cur[3] = {u.boneB[12], u.boneB[13], u.boneB[14]};
+        float stiffness = Mods_Look()->jiggle / 100.0f * 0.6f;
+        float damping = 0.82f;
+        int c;
+        for (c = 0; c < 3; c++) {
+            float delta = cur[c] - prev[c];
+            vel[c] += delta * stiffness - vel[c] * (1.0f - damping);
+            cur[c] = prev[c] + vel[c];
+        }
+        u.boneB[12] = cur[0]; u.boneB[13] = cur[1]; u.boneB[14] = cur[2];
+        prev[0] = cur[0]; prev[1] = cur[1]; prev[2] = cur[2];
+    }
     d.vu = 1;
     d.first = gsVuIdxCount;
-    for (i = 0; i + 2 < count; i++) { /* strip -> triangles */
-        if (layer == 4) { /* debris: a flagged vertex does not complete a triangle */
+
+    /* BT4 visual mod: CPU subdivision of fighter meshes (layers 0, 1).
+       `subdiv` 0 = off. 1..100 maps to up to 3 subdivision passes plus normal
+       displacement for real curvature, not just more flat triangles. */
+    int passes = 0;
+    float disp = 0.0f;
+    if (Mods_Look()->subdiv > 0 && (layer == 0 || layer == 1)) {
+        passes = Mods_Look()->subdiv > 66 ? 3 : Mods_Look()->subdiv > 33 ? 2 : 1;
+        disp = (float)(Mods_Look()->subdiv % 34) / 100.0f * 0.18f;
+    }
+
+    uint32_t ntri = 0;
+    for (i = 0; i + 2 < count; i++) {
+        if (layer == 4) {
             uint32_t flag;
             memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
             if (flag & 0xFFFF) {
                 continue;
             }
         }
-        for (k = 0; k < 3; k++) {
-            gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
+        ntri++;
+    }
+
+    int doSubdiv = passes > 0;
+    if (doSubdiv) {
+        uint32_t needV, needI;
+        sub_budget(passes, &needV, &needI);
+        while (passes > 0 &&
+               (gsVuVertCount + ntri * needV > MAX_VU_VERTS ||
+                gsVuIdxCount + ntri * needI > MAX_VU_IDX)) {
+            passes--;
+            sub_budget(passes, &needV, &needI);
+            if (passes == 0) {
+                doSubdiv = 0;
+            }
         }
     }
+
+    sSubDisp = disp;
+
+    if (doSubdiv && passes > 0) {
+        /* Subdivision path: one loop, recursive emission with curvature. */
+        for (i = 0; i + 2 < count; i++) {
+            if (layer == 4) {
+                uint32_t flag;
+                memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
+                if (flag & 0xFFFF) {
+                    continue;
+                }
+            }
+            sub_emit_tri(&vertices[i * 12], &vertices[(i + 1) * 12],
+                         &vertices[(i + 2) * 12], passes);
+        }
+    } else {
+        /* Original path: one triangle per strip cell, shared vertex buffer. */
+        for (i = 0; i + 2 < count; i++) {
+            if (layer == 4) { /* debris: a flagged vertex does not complete a triangle */
+                uint32_t flag;
+                memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
+                if (flag & 0xFFFF) {
+                    continue;
+                }
+            }
+            for (k = 0; k < 3; k++) {
+                gsVuIdx[gsVuIdxCount++] = gsVuVertCount + i + k;
+            }
+        }
+        memcpy(&gsVuVerts[gsVuVertCount * 12], vertices, count * 48);
+        gsVuVertCount += count;
+    }
     d.count = gsVuIdxCount - d.first;
-    memcpy(&gsVuVerts[gsVuVertCount * 12], vertices, count * 48);
-    gsVuVertCount += count;
     gsTargets[d.target].draws++;
     gsTargets[d.target].gen = gGsPageGen[gsTargets[d.target].fbp & 511];
     u.target[0] = lowres_now(d.target) ? (float)SCALE : 1.0f; /* (a work buffer at the PS2's resolution: target_lowres) */
