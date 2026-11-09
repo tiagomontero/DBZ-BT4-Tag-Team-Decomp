@@ -2583,23 +2583,51 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     if (depth_frac()) { u.misc[2] = -u.misc[2]; }
     u.misc[3] = (float)layer;
     u.light2[0] = consts[41]; u.light2[1] = consts[45]; u.light2[2] = consts[49]; u.light2[3] = consts[53];
-    /* BT4 visual mod: jiggle bone (resorte amortiguado sobre el hueso punta boneB). Laga el hueso punta detrás
-       del padre, creando movimiento secundario en ropa y pelo. Sólo capas de luchador (0, 1). */
+    /* BT4 visual mod: jiggle bone (resorte amortiguado sobre el hueso punta boneB). Se aplica SOLO a los trozos
+       de malla que mezclan dos huesos con un peso intermedio (0.05 < w < 0.95): esos son el pelo, las capas y
+       la ropa suelta. Los trozos rígidos (cuerpo, brazos, piernas, weight 0 o 1) se saltan, para que el personaje
+       no se deforme entero. */
     if (Mods_Look()->jiggle > 0 && (layer == 0 || layer == 1) && sJiggleIndex < JIGGLE_SLOTS) {
-        int slot = sJiggleIndex++;
-        float *prev = sJigglePrev[slot];
-        float *vel = sJiggleVel[slot];
-        float cur[3] = {u.boneB[12], u.boneB[13], u.boneB[14]};
-        float stiffness = Mods_Look()->jiggle / 100.0f * 0.6f;
-        float damping = 0.82f;
-        int c;
-        for (c = 0; c < 3; c++) {
-            float delta = cur[c] - prev[c];
-            vel[c] += delta * stiffness - vel[c] * (1.0f - damping);
-            cur[c] = prev[c] + vel[c];
+        /* heurística: peso promedio de los vértices del trozo */
+        float wsum = 0.0f;
+        uint32_t wcount = 0;
+        int isSoft = 0;
+        for (i = 0; i < count; i++) {
+            float w = vertices[i * 12 + 3];
+            wsum += w;
+            wcount++;
         }
-        u.boneB[12] = cur[0]; u.boneB[13] = cur[1]; u.boneB[14] = cur[2];
-        prev[0] = cur[0]; prev[1] = cur[1]; prev[2] = cur[2];
+        if (wcount > 0) {
+            float wavg = wsum / (float)wcount;
+            /* blending real: ni rígido (0 o 1) ni degenerado */
+            if (wavg > 0.05f && wavg < 0.95f) {
+                isSoft = 1;
+            }
+        }
+        /* también: si boneA y boneB son idénticos, es rígido */
+        if (isSoft) {
+            int identical = 1;
+            for (i = 0; i < 16; i++) {
+                if (u.boneA[i] != u.boneB[i]) { identical = 0; break; }
+            }
+            if (identical) isSoft = 0;
+        }
+        if (isSoft) {
+            int slot = sJiggleIndex++;
+            float *prev = sJigglePrev[slot];
+            float *vel = sJiggleVel[slot];
+            float cur[3] = {u.boneB[12], u.boneB[13], u.boneB[14]};
+            float stiffness = Mods_Look()->jiggle / 100.0f * 0.6f;
+            float damping = 0.82f;
+            int c;
+            for (c = 0; c < 3; c++) {
+                float delta = cur[c] - prev[c];
+                vel[c] += delta * stiffness - vel[c] * (1.0f - damping);
+                cur[c] = prev[c] + vel[c];
+            }
+            u.boneB[12] = cur[0]; u.boneB[13] = cur[1]; u.boneB[14] = cur[2];
+            prev[0] = cur[0]; prev[1] = cur[1]; prev[2] = cur[2];
+        }
     }
     d.vu = 1;
     d.first = gsVuIdxCount;
