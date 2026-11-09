@@ -2625,11 +2625,14 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             float cur[3] = {u.boneB[12], u.boneB[13], u.boneB[14]};
             float stiffness = Mods_Look()->jiggle / 100.0f * 0.6f;
             float damping = 0.82f;
-            int c;
-            for (c = 0; c < 3; c++) {
+            /* BT4 visual mod: dead zone - cuando el resorte vuelve al hueso (calmado), se fija en el
+               valor de reposo y se corta la velocidad, para que no haya overshoot ni estiramiento residual. */
+            float deadzone = 0.0005f;
+            for (int c = 0; c < 3; c++) {
                 float delta = cur[c] - prev[c];
                 vel[c] += delta * stiffness - vel[c] * (1.0f - damping);
                 cur[c] = prev[c] + vel[c];
+                if (fabsf(cur[c] - prev[c]) < deadzone) { cur[c] = prev[c]; vel[c] = 0.0f; }
             }
             u.boneB[12] = cur[0]; u.boneB[13] = cur[1]; u.boneB[14] = cur[2];
             prev[0] = cur[0]; prev[1] = cur[1]; prev[2] = cur[2];
@@ -2678,7 +2681,8 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     sSubDisp = disp;
 
     if (doSubdiv && passes > 0) {
-        /* Subdivision path: one loop, recursive emission with curvature. */
+        /* Subdivision path: one loop, recursive emission with curvature. Subdivide only the triangles that
+           blend two bones (soft parts: hair, cloth); the rigid ones (weight 0/1) keep their own triangle. */
         for (i = 0; i + 2 < count; i++) {
             if (layer == 4) {
                 uint32_t flag;
@@ -2687,8 +2691,17 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                     continue;
                 }
             }
-            sub_emit(&vertices[i * 12], &vertices[(i + 1) * 12],
-                     &vertices[(i + 2) * 12], passes);
+            float wsum = 0.0f;
+            int wcnt = 0;
+            for (int j = 0; j < 3; j++) { wsum += vertices[(i + j) * 12 + 3]; wcnt++; }
+            float wavg = wsum / wcnt;
+            if (wavg > 0.05f && wavg < 0.95f) {
+                sub_emit(&vertices[i * 12], &vertices[(i + 1) * 12],
+                         &vertices[(i + 2) * 12], passes);
+            } else {
+                sub_emit(&vertices[i * 12], &vertices[(i + 1) * 12],
+                         &vertices[(i + 2) * 12], 0);
+            }
         }
     } else {
         /* Original path: one triangle per strip cell, shared vertex buffer. */
