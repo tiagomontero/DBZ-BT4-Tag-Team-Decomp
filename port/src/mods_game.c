@@ -100,6 +100,7 @@ int Port_ModsChainGain(void) {
 #define FACE_CHARGE_ACTION 0x37 /* the ki charge (mods.c `charging`) */
 #define FACE_CHARGE_MOUTH 10    /* BOBJ_MOUTH_HOLD_OPEN */
 #define FACE_CHARGE_EYE 2       /* the frame the game's animation event 0x800000000000000 forces */
+#define BOBJ_MOUTH_SHAPE_1 5    /* fixed mouth shape 1 (include/battle/bobj_b.h) */
 static unsigned char sFaceOwn[BTL_OBJ_COUNT]; /* the mouth / eyes of this object are the ones this put there */
 static int sChargeTimer[BTL_OBJ_COUNT];       /* frames que lleva cargando ki este objeto (para animar boca y ojos) */
 
