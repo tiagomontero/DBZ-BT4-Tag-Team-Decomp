@@ -67,10 +67,9 @@ int *PortInput_Deadzone(int player);  /* [2] left, right stick: -1 = the game's 
 int *PortInput_TargetStick(int player); /* optional directional enemy targeting */
 int *PortInput_Vibration(int player); /* [2] on (0 / 1), strength (0..100 percent) */
 void PortInput_VibrationTest(int player); /* half a second of both motors */
-/* Mouse look: motion deltas (pixels) since the last read, and left-button state. */
-float PortInput_MouseDx(void);
-float PortInput_MouseDy(void);
-int PortInput_MouseLeft(void);
+/* Mouse look: motion deltas (pixels) since the last read, and left-button state. Written through the pointers: the
+   game's side is built without the FPU, so no float crosses the call. */
+void PortInput_MouseRead(float *dx, float *dy, int *left);
 /* Free-look yaw (radians) applied to the movement stick so WASD follows the view. */
 void PortInput_SetFreeLookYaw(float yaw);
 float PortInput_GetFreeLookYaw(void);

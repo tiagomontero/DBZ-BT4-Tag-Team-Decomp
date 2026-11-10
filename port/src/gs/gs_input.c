@@ -211,29 +211,23 @@ static bool SDLCALL mouse_watch(void *unused, SDL_Event *ev) {
     return true;
 }
 
-/* Read and reset the accumulated mouse motion since the last call. */
-float PortInput_MouseDx(void) {
-    float v;
+/* Read and reset the accumulated mouse motion since the last call, and the left-button state. The values go
+   through the pointers: the game's side of the port is built without the FPU (`-msoft-float`), so no float is
+   returned across that call. */
+void PortInput_MouseRead(float *dx, float *dy, int *left) {
     SDL_LockSpinlock(&sMouseLock);
-    v = sMouseDx;
-    sMouseDx = 0.0f;
+    if (dx != NULL) {
+        *dx = sMouseDx;
+        sMouseDx = 0.0f;
+    }
+    if (dy != NULL) {
+        *dy = sMouseDy;
+        sMouseDy = 0.0f;
+    }
+    if (left != NULL) {
+        *left = sMouseLeft;
+    }
     SDL_UnlockSpinlock(&sMouseLock);
-    return v;
-}
-float PortInput_MouseDy(void) {
-    float v;
-    SDL_LockSpinlock(&sMouseLock);
-    v = sMouseDy;
-    sMouseDy = 0.0f;
-    SDL_UnlockSpinlock(&sMouseLock);
-    return v;
-}
-int PortInput_MouseLeft(void) {
-    int v;
-    SDL_LockSpinlock(&sMouseLock);
-    v = sMouseLeft;
-    SDL_UnlockSpinlock(&sMouseLock);
-    return v;
 }
 
 void PortInput_SetFreeLookYaw(float yaw) { sFreeLookYaw = yaw; }

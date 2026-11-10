@@ -20,7 +20,6 @@
 #include <string.h>
 
 #include "gs/mods.h"
-#include "gs/ui.h"
 #include "port_addr.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && defined(__clang__)
@@ -43,6 +42,9 @@ extern int Battle_IsSplitScreen(void);
 extern int TagBattle_Active(void),TagBattle_Count(void),TagBattle_ViewActor(void),TagBattle_Target(int actor);
 extern int BattleSide_GetObjId(int side);
 extern int PortSpectator_Mode(void);
+/* gs/ui.h declares this, but it also pulls in SDL3's headers, which only the files under gs/ are built with; and
+   the values come back through pointers, not as a float return, because this file is built without the FPU. */
+extern void PortInput_MouseRead(float *dx, float *dy, int *left);
 
 int PortMods_ViewActor(int side) {
     int own,target,count;
@@ -208,9 +210,7 @@ void PortMods_GameTick(void) {
         sGame.battle = sGame.f[0].found && sGame.f[1].found;
         sGame.split = sGame.battle && Battle_IsSplitScreen();
     } else { memset(sNatural,0,sizeof(sNatural)); memset(sPausedCamera,0,sizeof(sPausedCamera)); }
-    sGame.mouseDx = PortInput_MouseDx();
-    sGame.mouseDy = PortInput_MouseDy();
-    sGame.mouseLeft = PortInput_MouseLeft();
+    PortInput_MouseRead(&sGame.mouseDx,&sGame.mouseDy,&sGame.mouseLeft);
     Mods_Tick();
 }
 
