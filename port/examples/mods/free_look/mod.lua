@@ -1,8 +1,8 @@
--- Free look v1.8: personaje como pivote, orbita con el mouse.
+-- Free look v1.9: personaje como pivote, cámara siempre detrás de él.
 --   - Mover el mouse: orbita la vista alrededor del personaje (yaw/pitch)
---   - Clic izquierdo: recentra en el personaje de inmediato
+--   - Clic izquierdo: recentra la cámara directamente detrás del personaje
 --   - Rueda del mouse: acerca / aleja la cámara (zoom)
---   - WASD / stick izquierdo: se mueve hacia donde mira la vista
+--   - WASD / stick izquierdo: el personaje se mueve y la cámara lo sigue
 --   - Sin mover el mouse por N segundos: vuelve suavemente a la cámara del juego
 -- Los ataques siguen yendo al rival; el mouse solo cambia lo que se ve.
 
@@ -17,21 +17,21 @@ end
 local sides = { {}, {} }
 
 local function reset(c, dist_default)
-    c.yaw = 0
-    c.pitch = 0
+    c.yaw = 0            -- offset de orbita del mouse (0 = directamente detrás)
+    c.pitch = 0          -- offset de inclinación del mouse
     c.dist = dist_default
     c.lastMove = nil
 end
 
 return {
     name = "Free look",
-    version = "1.8",
+    version = "1.9",
     author = "BT4decomp",
-    description = "Personaje como pivote. Orbita con el mouse, zoom con rueda, WASD sigue la vista.",
+    description = "Cámara siempre detrás del personaje. Orbita con el mouse, zoom con rueda, la cámara sigue al personaje cuando se mueve.",
     settings = {
         { id = "enable", label = "Activar free look", type = "toggle", default = 1 },
         { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 10, max = 500, step = 5, default = 150 },
-        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
+        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 500 },
         { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 700, step = 25, default = 220 },
         { id = "invert_y", label = "Invertir eje vertical", type = "toggle", default = 0 },
         { id = "pitch_min", label = "Pitch mínimo (deg)", type = "slider", min = -90, max = 0, step = 5, default = -75 },
@@ -115,11 +115,18 @@ return {
             c.dist = c.dist + (dist_default - c.dist) * k
         end
 
-        -- Posición orbital alrededor del personaje (pivote)
+        -- La cámara está siempre DETRÁS del personaje:
+        -- p.yaw + pi = 180 grados detrás del personaje (donde mira)
+        -- c.yaw = offset extra del mouse para orbita
+        local base_yaw = p.yaw + pi
+        local total_yaw = wrap(base_yaw + c.yaw)
+        local total_pitch = c.pitch
+
+        -- Posición orbital alrededor del personaje (pivote = centro del personaje)
         -- +Y es hacia abajo en este juego, así que elevar = restar en Y
-        local cx = p.pos.x + c.dist * math.cos(c.pitch) * math.sin(c.yaw)
+        local cx = p.pos.x + c.dist * math.cos(total_pitch) * math.sin(total_yaw)
         local cy = p.pos.y - height
-        local cz = p.pos.z + c.dist * math.cos(c.pitch) * math.cos(c.yaw)
+        local cz = p.pos.z + c.dist * math.cos(total_pitch) * math.cos(total_yaw)
 
         cam.pos.x = cx
         cam.pos.y = cy
@@ -131,6 +138,7 @@ return {
         cam.target.z = p.pos.z
 
         -- Decirle a C el yaw para que WASD / el stick gire con la vista
-        bt3.set_free_look_yaw(c.yaw)
+        -- Usamos el yaw base del personaje + offset del mouse
+        bt3.set_free_look_yaw(total_yaw)
     end,
 }

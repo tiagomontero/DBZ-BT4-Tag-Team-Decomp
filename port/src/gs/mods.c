@@ -839,6 +839,33 @@ static int l_look(lua_State *L) {
         }
     }
     lua_pop(L, 1);
+    lua_getfield(L, 1, "subdiv_soft_disp");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.subdiv_soft_disp) {
+            sLookBuild.subdiv_soft_disp = n;
+        }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "subdiv_rigid_disp");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.subdiv_rigid_disp) {
+            sLookBuild.subdiv_rigid_disp = n;
+        }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "subdiv_adaptive");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.subdiv_adaptive) {
+            sLookBuild.subdiv_adaptive = n;
+        }
+    }
+    lua_pop(L, 1);
     lua_getfield(L, 1, "mesh_smooth");
     if (!lua_isnil(L, -1)) {
         lua_Number v = luaL_checknumber(L, -1);

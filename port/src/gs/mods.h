@@ -124,6 +124,9 @@ typedef struct ModsLook {
     unsigned rim_color;
     int subdiv_soft;   /* BT4 visual mod: 0 = off, 1..100 = subdivision passes for soft parts (cloth, joints) */
     int subdiv_rigid;  /* BT4 visual mod: 0 = off, 1..100 = subdivision passes for rigid parts (arms, legs, torso) */
+    int subdiv_soft_disp;   /* BT4 visual mod: 0 = off, 1..100 = extra displacement for soft parts */
+    int subdiv_rigid_disp;  /* BT4 visual mod: 0 = off, 1..100 = extra displacement for rigid parts */
+    int subdiv_adaptive;    /* BT4 visual mod: 0 = off, 1 = adapt passes to curvature automatically */
     int toon_sharpen;  /* BT4 visual mod: 0 = off, 1..100 = sharpen toon shading edges for more definition */
     int mesh_smooth;   /* BT4 visual mod: 0 = off, 1..100 = automatic mesh subdivision for all character parts (smooths polygonal look) */
     int outline_strength; /* BT4 visual mod: 0 = off, 1..100 = contour outline around fighters for sharper, more defined look */

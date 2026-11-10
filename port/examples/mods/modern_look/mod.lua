@@ -44,6 +44,10 @@ return {
         slider("subdiv_soft", "Subdivision: soft parts", 0, "Subdivision passes for cloth, joints and other soft parts."),
         slider("subdiv_rigid", "Subdivision: rigid parts", 0, "Subdivision passes for arms, legs, torso and other rigid parts."),
         slider("toon_sharpen", "Toon edge sharpen", 0, "Sharpen toon shading edges for more definition on the fighters."),
+        slider("subdiv_soft_disp", "Displacement: soft parts", 0, "Extra displacement for soft part subdivision."),
+        slider("subdiv_rigid_disp", "Displacement: rigid parts", 0, "Extra displacement for rigid part subdivision."),
+        { id = "subdiv_adaptive", label = "Adaptive subdivision", type = "toggle", default = 1,
+          tip = "Reduce passes automatically when curvature is low to save budget." },
     },
 
     -- Asked every blank: switching the mod off (F1 > Mods) gives the game's own picture back at once.
@@ -59,6 +63,9 @@ return {
             mesh_smooth = bt3.setting("mesh_smooth"),
             subdiv_soft = bt3.setting("subdiv_soft"),
             subdiv_rigid = bt3.setting("subdiv_rigid"),
+            subdiv_soft_disp = bt3.setting("subdiv_soft_disp"),
+            subdiv_rigid_disp = bt3.setting("subdiv_rigid_disp"),
+            subdiv_adaptive = bt3.setting("subdiv_adaptive") and 1 or 0,
             toon_sharpen = bt3.setting("toon_sharpen"),
         }
     end,

@@ -2698,18 +2698,63 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     /* BT4 visual mod: CPU subdivision of fighter meshes (layers 0, 1).
        `subdiv_soft` 0 = off, 1..100 = passes for soft parts (cloth, joints).
        `subdiv_rigid` 0 = off, 1..100 = passes for rigid parts (arms, legs, torso).
-       Each has its own pass count and displacement. */
+       `subdiv_soft_disp` / `subdiv_rigid_disp` 0 = off, 1..100 = extra displacement.
+       `subdiv_adaptive` 0 = off, 1 = adapt passes to curvature automatically.
+       Each part type has its own pass count and displacement. */
     int passes_soft = 0, passes_rigid = 0;
     float disp_soft = 0.0f, disp_rigid = 0.0f;
     int want_soft = Mods_Look()->subdiv_soft > 0;
     int want_rigid = Mods_Look()->subdiv_rigid > 0;
+    int adaptive = Mods_Look()->subdiv_adaptive;
     if (want_soft && (layer == 0 || layer == 1)) {
         passes_soft = Mods_Look()->subdiv_soft > 50 ? 2 : Mods_Look()->subdiv_soft > 25 ? 1 : 0;
         disp_soft = (float)Mods_Look()->subdiv_soft / 100.0f * 0.05f;
+        disp_soft += (float)Mods_Look()->subdiv_soft_disp / 100.0f * 0.03f;
     }
     if (want_rigid && (layer == 0 || layer == 1)) {
         passes_rigid = Mods_Look()->subdiv_rigid > 50 ? 2 : Mods_Look()->subdiv_rigid > 25 ? 1 : 0;
         disp_rigid = (float)Mods_Look()->subdiv_rigid / 100.0f * 0.05f;
+        disp_rigid += (float)Mods_Look()->subdiv_rigid_disp / 100.0f * 0.03f;
+    }
+    /* Adaptive mode: if enabled and curvature is low, reduce passes to save budget;
+       if curvature is high, keep max passes for that part type. */
+    if (adaptive) {
+        if (passes_soft > 0) {
+            float soft_curv_sum = 0.0f; int soft_curv_n = 0;
+            if (passes_rigid > 0) {
+                float rigid_curv_sum = 0.0f; int rigid_curv_n = 0;
+                for (i = 0; i + 2 < count; i++) {
+                    if (layer == 4) {
+                        uint32_t flag;
+                        memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
+                        if (flag & 0xFFFF) continue;
+                    }
+                    float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
+                    float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
+                    if (wavg > 0.05f && wavg < 0.95f && curv > SOFT_CURV_MIN) {
+                        soft_curv_sum += curv; soft_curv_n++;
+                    } else if (curv > SUBDIV_CURV_MIN) {
+                        rigid_curv_sum += curv; rigid_curv_n++;
+                    }
+                }
+                if (soft_curv_n > 0 && soft_curv_sum / soft_curv_n < 0.4f) passes_soft = passes_soft > 1 ? 1 : 0;
+                if (rigid_curv_n > 0 && rigid_curv_sum / rigid_curv_n < 0.4f) passes_rigid = passes_rigid > 1 ? 1 : 0;
+            } else {
+                for (i = 0; i + 2 < count; i++) {
+                    if (layer == 4) {
+                        uint32_t flag;
+                        memcpy(&flag, &vertices[(i + 2) * 12 + 3], 4);
+                        if (flag & 0xFFFF) continue;
+                    }
+                    float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
+                    float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
+                    if (wavg > 0.05f && wavg < 0.95f && curv > SOFT_CURV_MIN) {
+                        soft_curv_sum += curv; soft_curv_n++;
+                    }
+                }
+                if (soft_curv_n > 0 && soft_curv_sum / soft_curv_n < 0.4f) passes_soft = passes_soft > 1 ? 1 : 0;
+            }
+        }
     }
 
     uint32_t nsoft = 0, nrigid = 0, nsub;
