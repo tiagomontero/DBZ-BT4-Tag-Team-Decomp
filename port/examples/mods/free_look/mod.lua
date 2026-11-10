@@ -1,4 +1,4 @@
--- Free look v1.777: personaje como pivote, orbita con el mouse.
+-- Free look v1.8: personaje como pivote, orbita con el mouse.
 --   - Mover el mouse: orbita la vista alrededor del personaje (yaw/pitch)
 --   - Clic izquierdo: recentra en el personaje de inmediato
 --   - Rueda del mouse: acerca / aleja la cámara (zoom)
@@ -25,7 +25,7 @@ end
 
 return {
     name = "Free look",
-    version = "1.777",
+    version = "1.8",
     author = "BT4decomp",
     description = "Personaje como pivote. Orbita con el mouse, zoom con rueda, WASD sigue la vista.",
     settings = {
@@ -129,10 +129,6 @@ return {
         cam.target.x = p.pos.x
         cam.target.y = p.pos.y
         cam.target.z = p.pos.z
-
-        -- Desvío angular directo para respuesta inmediata al mouse
-        cam.rot.x = wrap(cam.rot.x + c.pitch)
-        cam.rot.y = wrap(cam.rot.y + c.yaw)
 
         -- Decirle a C el yaw para que WASD / el stick gire con la vista
         bt3.set_free_look_yaw(c.yaw)
