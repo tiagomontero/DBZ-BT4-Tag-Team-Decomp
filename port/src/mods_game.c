@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>  /* para fprintf: log temporal de chara_id al cargar ki */
 
 #include "gs/mods.h"
 #include "port_addr.h"
@@ -151,6 +152,7 @@ void Port_ModsFaceGestures(int objId) {
     chr = (uint8_t GAME_PTR)BtlChar_FindByObjId(objId);
     if (chr != NULL && look != NULL && look->face > 0 && BtlAct_GetCurrent(chr) == FACE_CHARGE_ACTION) {
         chara = BtlCharApi_GetChara(objId);
+        fprintf(stderr, "BT4 visual: objId=%d chara=%d charging ki\n", objId, chara);
         if (face_expr_for_chara(chara, &mouth, &eye)) {
             /* expresión personalizada para este personaje */
         }
