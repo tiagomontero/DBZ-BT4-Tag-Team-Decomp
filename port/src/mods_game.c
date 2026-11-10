@@ -42,6 +42,7 @@ extern int Battle_IsSplitScreen(void);
 extern int TagBattle_Active(void),TagBattle_Count(void),TagBattle_ViewActor(void),TagBattle_Target(int actor);
 extern int BattleSide_GetObjId(int side);
 extern int PortSpectator_Mode(void);
+extern int BtlCharApi_GetChara(int objId);
 /* gs/ui.h declares this, but it also pulls in SDL3's headers, which only the files under gs/ are built with; and
    the values come back through pointers, not as a float return, because this file is built without the FPU. */
 extern void PortInput_MouseRead(float *dx, float *dy, int *left);
@@ -100,6 +101,30 @@ int Port_ModsChainGain(void) {
 #define FACE_CHARGE_EYE 2       /* the frame the game's animation event 0x800000000000000 forces */
 static unsigned char sFaceOwn[BTL_OBJ_COUNT]; /* the mouth / eyes of this object are the ones this put there */
 
+/* Expresiones de cara al cargar ki, por personaje (chara ID).
+   Completa esta tabla con los IDs reales de cada personaje y la boca / ojos
+   que quieras que use mientras carga ki. Si un personaje no está en la tabla,
+   se usa la expresión genérica (boca abierta + ojos serios). */
+typedef struct { int chara; int mouth; int eye; } FaceExpr;
+static const FaceExpr sFaceExpr[] = {
+    /* { chara_id, boca (BOBJ_MOUTH_*), ojos (frame) } */
+    {  0, 10, 2 }, /* ejemplo: reemplaza 0 por el ID real del personaje */
+    {  1, 10, 3 }, /* ejemplo */
+};
+#define FACE_EXPR_COUNT (sizeof(sFaceExpr) / sizeof(sFaceExpr[0]))
+
+static int face_expr_for_chara(int chara, int *mouth, int *eye) {
+    int i;
+    for (i = 0; i < FACE_EXPR_COUNT; i++) {
+        if (sFaceExpr[i].chara == chara) {
+            *mouth = sFaceExpr[i].mouth;
+            *eye = sFaceExpr[i].eye;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void Port_ModsFaceGestures(int objId) {
     extern void GAME_PTR BtlObj_Get(int objId);
     extern void GAME_PTR BtlChar_FindByObjId(int objId);
@@ -112,6 +137,9 @@ void Port_ModsFaceGestures(int objId) {
     uint8_t GAME_PTR obj; /* (one declarator each: GAME_PTR is a pointer, and `a, b` would leave b an integer) */
     uint8_t GAME_PTR chr;
     uint32_t eyes;
+    int chara;
+    int mouth = FACE_CHARGE_MOUTH;
+    int eye = FACE_CHARGE_EYE;
 
     if (gPortResim || objId < 0 || objId >= BTL_OBJ_COUNT) {
         return;
@@ -122,12 +150,16 @@ void Port_ModsFaceGestures(int objId) {
     }
     chr = (uint8_t GAME_PTR)BtlChar_FindByObjId(objId);
     if (chr != NULL && look != NULL && look->face > 0 && BtlAct_GetCurrent(chr) == FACE_CHARGE_ACTION) {
-        if (BtlObj_GetMouthMode(obj) != FACE_CHARGE_MOUTH) { /* (this frame's own events may have changed it) */
-            BtlObj_SetSubState(obj, FACE_CHARGE_MOUTH, 0);
+        chara = BtlCharApi_GetChara(objId);
+        if (face_expr_for_chara(chara, &mouth, &eye)) {
+            /* expresión personalizada para este personaje */
+        }
+        if (BtlObj_GetMouthMode(obj) != mouth) { /* (this frame's own events may have changed it) */
+            BtlObj_SetSubState(obj, mouth, 0);
         }
         eyes = *(uint32_t GAME_PTR)(obj + BOBJ_EYES); /* (the eye table's game address, 0: no eyes) */
-        if (eyes != 0 && *(const uint32_t *)Port_Ptr(eyes) >= FACE_CHARGE_EYE) { /* (its first word: how many) */
-            BtlObj_SetEyeFrame(obj, FACE_CHARGE_EYE);
+        if (eyes != 0 && *(const uint32_t *)Port_Ptr(eyes) >= eye) { /* (its first word: how many) */
+            BtlObj_SetEyeFrame(obj, eye);
         }
         sFaceOwn[objId] = 1;
         return;
@@ -135,10 +167,10 @@ void Port_ModsFaceGestures(int objId) {
     if (!sFaceOwn[objId]) {
         return;
     }
-    if (BtlObj_GetMouthMode(obj) == FACE_CHARGE_MOUTH) {
+    if (BtlObj_GetMouthMode(obj) == mouth) {
         BtlObj_SetSubState(obj, 0, 0);
     }
-    if (BtlObj_GetEyeFrame(obj) == FACE_CHARGE_EYE) {
+    if (BtlObj_GetEyeFrame(obj) == eye) {
         BtlObj_SetEyeFrame(obj, 9); /* (9: the eyes go back to blinking) */
     }
     sFaceOwn[objId] = 0;
