@@ -5,7 +5,7 @@
 #   docker build -t bt3-port-release:jammy port/release        (port/release/build.sh does this)
 FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive TZ=UTC LANG=C.UTF-8
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg build-essential binutils python3 cmake ninja-build pkg-config git p7zip-full \
         libwayland-dev libxkbcommon-dev wayland-protocols libdecor-0-dev libx11-dev libxext-dev libxrandr-dev \
         libxcursor-dev libxi-dev libxfixes-dev libxss-dev libxtst-dev libpulse-dev libpipewire-0.3-dev libasound2-dev \
