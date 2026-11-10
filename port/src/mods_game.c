@@ -194,30 +194,8 @@ void Port_ModsFaceGestures(int objId) {
         sFaceOwn[objId] = 1;
         return;
     }
-    /* Ya no carga ki: si el mod era el dueño de la cara, hacer un gesto de descarga
-       (boca abierta grande + ojos abiertos brevemente) antes de devolver al juego. */
+    /* Ya no carga ki: devolver la cara al reposo sin gesto de expulsión de ki. */
     if (!sFaceOwn[objId]) {
-        return;
-    }
-    if (sChargeTimer[objId] > 0) {
-        /* Gesto de descarga: boca abierta grande y ojos abiertos durante unos frames */
-        if (sChargeTimer[objId] < 10) {
-            if (BtlObj_GetMouthMode(obj) != FACE_CHARGE_MOUTH) {
-                BtlObj_SetSubState(obj, FACE_CHARGE_MOUTH, 0);
-            }
-            if (BtlObj_GetEyeFrame(obj) != 1) { /* ojos abiertos (frame 1) */
-                BtlObj_SetEyeFrame(obj, 1);
-            }
-        } else {
-            /* Volver a reposo */
-            if (BtlObj_GetMouthMode(obj) == FACE_CHARGE_MOUTH) {
-                BtlObj_SetSubState(obj, 0, 0);
-            }
-            if (BtlObj_GetEyeFrame(obj) == 1) {
-                BtlObj_SetEyeFrame(obj, 9); /* (9: the eyes go back to blinking) */
-            }
-        }
-        sChargeTimer[objId]--;
         return;
     }
     if (BtlObj_GetMouthMode(obj) == mouth) {
@@ -226,6 +204,7 @@ void Port_ModsFaceGestures(int objId) {
     if (BtlObj_GetEyeFrame(obj) == eye) {
         BtlObj_SetEyeFrame(obj, 9); /* (9: the eyes go back to blinking) */
     }
+    sChargeTimer[objId] = 0;
     sFaceOwn[objId] = 0;
 }
 

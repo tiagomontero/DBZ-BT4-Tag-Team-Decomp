@@ -8,6 +8,9 @@
 --   - ambient shadows: soft shadows in creases and where rocks and fighters meet the ground;
 --   - brighter energy: ki blasts, beams and sparks stronger and more saturated;
 --   - energy light: that light tinting the ground, the rocks and the fighters round it.
+--   - mesh smoothing: subdivision passes that soften polygonal edges on character models (soft parts like cloth
+--     and joints, and rigid parts like arms, legs and torso); toon_sharpen makes the toon-shading edges more
+--     defined; mesh_smooth applies subdivision to all parts at once for a smoother overall look.
 -- Only the picture changes: the fight, replays and online play are the same with or without it.
 -- Vivid colours, ambient shadows and energy light use DirectX 12 or Vulkan (F1 > Video).
 -- (The BT4decomp port's "Effects" settings, written as a script mod: docs/port/mods.md, bt3.look.)
@@ -25,9 +28,9 @@ end
 
 return {
     name = "Modern look",
-    version = "1.1",
+    version = "1.2",
     author = "BT4decomp",
-    description = "Anime shading, rim light, vivid colours, ambient shadows and glowing energy.",
+    description = "Anime shading, rim light, vivid colours, ambient shadows, glowing energy, and mesh smoothing for smoother character models.",
     settings = {
         slider("shading", "Anime shading", 100, "Cool coloured shadows with a soft edge on the fighters."),
         slider("rim", "Rim light", 100, "Light along the fighters' silhouettes."),
@@ -37,6 +40,10 @@ return {
         slider("ambient", "Ambient shadows", 100, "Soft shadows in corners and at the foot of things (GPU renderer)."),
         slider("energy", "Brighter energy", 100, "Ki blasts, beams and sparks stronger and more saturated."),
         slider("energy_light", "Energy light", 50, "Energy lights up the ground and fighters round it (GPU renderer)."),
+        slider("mesh_smooth", "Mesh smoothing (all parts)", 0, "Subdivision passes for every character part: softens the polygonal look of models. 0 = off, higher = smoother."),
+        slider("subdiv_soft", "Subdivision: soft parts", 0, "Subdivision passes for cloth, joints and other soft parts."),
+        slider("subdiv_rigid", "Subdivision: rigid parts", 0, "Subdivision passes for arms, legs, torso and other rigid parts."),
+        slider("toon_sharpen", "Toon edge sharpen", 0, "Sharpen toon shading edges for more definition on the fighters."),
     },
 
     -- Asked every blank: switching the mod off (F1 > Mods) gives the game's own picture back at once.
@@ -49,6 +56,11 @@ return {
             ambient = bt3.setting("ambient"),
             energy = bt3.setting("energy"),
             energy_light = bt3.setting("energy_light"),
+            mesh_smooth = bt3.setting("mesh_smooth"),
+            subdiv_soft = bt3.setting("subdiv_soft"),
+            subdiv_rigid = bt3.setting("subdiv_rigid"),
+            toon_sharpen = bt3.setting("toon_sharpen"),
         }
     end,
 }
+
