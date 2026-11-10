@@ -2561,6 +2561,17 @@ static int sub_emit_grid(const float *a, const float *b, const float *c, int pas
             for (k = 0; k < 12; k++) {
                 v[k] = a[k] * w1 + b[k] * w2 + c[k] * w3;
             }
+            /* The game's corner normals are unit length: the mix of the three is not. The toon layer reads its
+               ramp straight from the normal's dot product, so a mix left short would darken the middle and the
+               edges of every new triangle (the "irregular triangles" on models whose corners turn a lot).
+               Normalising keeps the same smooth field the original triangle had. */
+            {
+                float nx = v[4], ny = v[5], nz = v[6];
+                float nl = sqrtf(nx * nx + ny * ny + nz * nz);
+                if (nl > 0.0001f) {
+                    v[4] = nx / nl; v[5] = ny / nl; v[6] = nz / nl;
+                }
+            }
             /* Only inner points move: the corners and the edge points must stay shared with the
                neighbouring triangles, and a strip's data has no room for a curved edge. */
             if (disp > 0.0f && i > 0 && j > 0 && i + j < n) {
@@ -2646,7 +2657,12 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         sToonWanted = 0;
         return;
     }
+    /* BT4 visual mod: filtered (bilinear + mipmap) textures on subdivided fighter meshes,
+       so skin and clothes stay smooth instead of pixelated between the new triangles. */
     sToonWanted = 0;
+    if (Mods_Look()->subdiv > 0) {
+        d.sampler |= 1 | 8; /* bit 0 = linear min/mag filter; bit 3 = mipmap linear */
+    }
     if (layer == 2 && d.misc[1] == 1.0f && d.misc[2] != 0.0f) {
         /* TEST.DATE rejects pixels marked by FBA. Stencil also rejects overlap within this
            draw run, which a single snapshot of the alpha buffer cannot see. */
