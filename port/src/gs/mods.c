@@ -44,6 +44,7 @@
 #include "../../third_party/lua/lualib.h"
 #include "fight_panels.h"
 #include "mods.h"
+#include "ui.h"
 #include "bundled_skill_list_0394.h"
 #include "bundled_mods_r1.h"
 #include "bundled_modern_hud_r2.h"
@@ -1255,6 +1256,14 @@ static void settings_save(void) {
     fclose(fp);
 }
 
+/* bt3.set_free_look_yaw(yaw): the free_look mod tells the port the current view yaw
+   so WASD / the left stick rotates to follow the view. */
+static int l_set_free_look_yaw(lua_State *L) {
+    float yaw = (float)luaL_checknumber(L, 1);
+    PortInput_SetFreeLookYaw(yaw);
+    return 0;
+}
+
 static void open_libs(lua_State *L, int i) {
     static const char *const drop[] = {"dofile", "loadfile", "load", NULL};
     int k;
@@ -1302,6 +1311,8 @@ static void open_libs(lua_State *L, int i) {
     lua_setfield(L, -2, "log");
     lua_pushcfunction(L, l_look);
     lua_setfield(L, -2, "look");
+    lua_pushcfunction(L, l_set_free_look_yaw);
+    lua_setfield(L, -2, "set_free_look_yaw");
     lua_setglobal(L, "bt3");
 }
 

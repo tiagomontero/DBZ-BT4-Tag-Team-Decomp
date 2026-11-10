@@ -67,6 +67,13 @@ int *PortInput_Deadzone(int player);  /* [2] left, right stick: -1 = the game's 
 int *PortInput_TargetStick(int player); /* optional directional enemy targeting */
 int *PortInput_Vibration(int player); /* [2] on (0 / 1), strength (0..100 percent) */
 void PortInput_VibrationTest(int player); /* half a second of both motors */
+/* Mouse look: motion deltas (pixels) since the last read, and left-button state. */
+float PortInput_MouseDx(void);
+float PortInput_MouseDy(void);
+int PortInput_MouseLeft(void);
+/* Free-look yaw (radians) applied to the movement stick so WASD follows the view. */
+void PortInput_SetFreeLookYaw(float yaw);
+float PortInput_GetFreeLookYaw(void);
 typedef struct PortStickView { /* [0] the left stick / trigger, [1] the right */
     int connected, canVibrate;
     float raw[2][2];            /* x, y as the controller gives them: -1..1, + = right / down */

@@ -58,6 +58,13 @@ static const struct { const char *name, *label; unsigned bit; int key; int pad; 
 static int sKeys[2][PORT_ACTIONS], sPadBtn[2][PORT_PAD_BUTTONS], sPadSlot[2];
 static unsigned sQuickPress[2];
 static SDL_SpinLock sQuickPressLock;
+/* Mouse look: deltas accumulated from SDL mouse-motion events, plus left-button state. */
+static float sMouseDx, sMouseDy;
+static int sMouseLeft;
+static SDL_SpinLock sMouseLock;
+/* Free-look yaw (radians): the view offset set by the free_look Lua mod. WASD is rotated
+   by this in Port_PadRead so movement follows the view. */
+static float sFreeLookYaw;
 extern int gPortTboTyping;
 /* Per player: the deadzone of the left and of the right stick (-1 = the game's own, as the pad's bytes always were
    passed; 0..PORT_DEADZONE_MAX = a round one of that many percent, stick_bytes below), and vibration (on, strength
@@ -93,7 +100,10 @@ static void defaults(int player) {
 
 static int range(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 
+static bool SDLCALL mouse_watch(void *unused, SDL_Event *ev);
+
 static void load(void) {
+    SDL_AddEventWatch(mouse_watch, NULL);
     char name[32];
     int p, a;
     for (p = 0; p < 2; p++) {
@@ -181,6 +191,65 @@ int PortInput_Hotkey(const SDL_Event *ev) {
     }
     return 0;
 }
+
+/* SDL event watch: accumulates mouse-motion deltas and left-button state.
+   Runs on whichever thread pumps SDL events (the render thread with BT3_GS_THREAD,
+   otherwise the game thread). */
+static bool SDLCALL mouse_watch(void *unused, SDL_Event *ev) {
+    if (ev->type == SDL_EVENT_MOUSE_MOTION) {
+        SDL_LockSpinlock(&sMouseLock);
+        sMouseDx += (float)ev->motion.xrel;
+        sMouseDy += (float)ev->motion.yrel;
+        SDL_UnlockSpinlock(&sMouseLock);
+    } else if ((ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
+                ev->type == SDL_EVENT_MOUSE_BUTTON_UP) &&
+               ev->button.button == SDL_BUTTON_LEFT) {
+        SDL_LockSpinlock(&sMouseLock);
+        sMouseLeft = ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
+        SDL_UnlockSpinlock(&sMouseLock);
+    }
+    return true;
+}
+
+/* Read and reset the accumulated mouse motion since the last call. */
+float PortInput_MouseDx(void) {
+    float v;
+    SDL_LockSpinlock(&sMouseLock);
+    v = sMouseDx;
+    sMouseDx = 0.0f;
+    SDL_UnlockSpinlock(&sMouseLock);
+    return v;
+}
+float PortInput_MouseDy(void) {
+    float v;
+    SDL_LockSpinlock(&sMouseLock);
+    v = sMouseDy;
+    sMouseDy = 0.0f;
+    SDL_UnlockSpinlock(&sMouseLock);
+    return v;
+}
+int PortInput_MouseLeft(void) {
+    int v;
+    SDL_LockSpinlock(&sMouseLock);
+    v = sMouseLeft;
+    SDL_UnlockSpinlock(&sMouseLock);
+    return v;
+}
+
+void PortInput_SetFreeLookYaw(float yaw) { sFreeLookYaw = yaw; }
+float PortInput_GetFreeLookYaw(void) { return sFreeLookYaw; }
+
+/* Rotate a stick vector (x, y in -1..1) by the free-look yaw. */
+static void apply_free_look_to_stick(float *x, float *y) {
+    float yaw = sFreeLookYaw;
+    if (yaw == 0.0f) return;
+    float c = cosf(yaw), s = sinf(yaw);
+    float nx = *x * c - *y * s;
+    float ny = *x * s + *y * c;
+    *x = nx;
+    *y = ny;
+}
+
 /* The settings window closed, or its exit question was answered, with a controller button: that press is not the game's. */
 void PortInput_Swallow(void) { sSwallow = 2; }
 void PortInput_SwallowKeys(void) { sKeySwallow = 1; }
@@ -1202,6 +1271,14 @@ int Port_PadRead(int socket, unsigned char *data) {
        to gPad inside the simulation would make network peers disagree. */
     if(socket==0 && PortSpectator_ConsumesInput()) {
         btn=PortSpectator_FilterButtons(btn);rx=ry=lx=ly=0x80;
+    }
+    /* Free look: rotate the movement stick so WASD / left stick follows the view. */
+    if (socket == 0 && sFreeLookYaw != 0.0f) {
+        float fx = (float)(lx - 128) / 128.0f;
+        float fy = (float)(ly - 128) / 128.0f;
+        apply_free_look_to_stick(&fx, &fy);
+        lx = (unsigned char)(fx * 127.0f + 128.0f);
+        ly = (unsigned char)(fy * 127.0f + 128.0f);
     }
     memset(data, 0, 18);
     data[0] = (unsigned char)(~btn & 0xFF);       /* active low */
