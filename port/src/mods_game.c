@@ -109,7 +109,8 @@ void Port_ModsFaceGestures(int objId) {
     extern int BtlObj_GetMouthMode(void GAME_PTR obj);
     extern int BtlObj_GetEyeFrame(void GAME_PTR obj);
     const ModsLook *look = Mods_Look();
-    uint8_t GAME_PTR obj, chr;
+    uint8_t GAME_PTR obj; /* (one declarator each: GAME_PTR is a pointer, and `a, b` would leave b an integer) */
+    uint8_t GAME_PTR chr;
     uint32_t eyes;
 
     if (gPortResim || objId < 0 || objId >= BTL_OBJ_COUNT) {
