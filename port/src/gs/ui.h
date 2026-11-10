@@ -69,7 +69,7 @@ int *PortInput_Vibration(int player); /* [2] on (0 / 1), strength (0..100 percen
 void PortInput_VibrationTest(int player); /* half a second of both motors */
 /* Mouse look: motion deltas (pixels) since the last read, and left-button state. Written through the pointers: the
    game's side is built without the FPU, so no float crosses the call. */
-void PortInput_MouseRead(float *dx, float *dy, int *left);
+void PortInput_MouseRead(float *dx, float *dy, int *left, float *scroll);
 /* Free-look yaw (radians) applied to the movement stick so WASD follows the view. */
 void PortInput_SetFreeLookYaw(float yaw);
 float PortInput_GetFreeLookYaw(void);

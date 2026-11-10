@@ -1064,11 +1064,12 @@ static void push_game(lua_State *L, const FpState *fp, const ModsGame *g) {
         lua_rawseti(L, -2, side + 1);
     }
     lua_setfield(L, -2, "fighters");
-    {   /* mouse: dx, dy accumulated since the last read, left-button state */
-        lua_createtable(L, 0, 3);
+    {   /* mouse: dx, dy accumulated since the last read, left-button state, scroll */
+        lua_createtable(L, 0, 4);
         set_num(L, "dx", g->mouseDx);
         set_num(L, "dy", g->mouseDy);
         set_bool(L, "left", g->mouseLeft != 0);
+        set_num(L, "scroll", g->mouseScroll);
         lua_setfield(L, -2, "mouse");
     }
 }

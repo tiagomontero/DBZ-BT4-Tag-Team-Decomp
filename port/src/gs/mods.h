@@ -20,6 +20,7 @@ typedef struct ModsGame {
     int split;     /* split-screen layout */
     float mouseDx, mouseDy; /* accumulated mouse motion since the last read (pixels) */
     int mouseLeft;          /* left mouse button: 1 while held */
+    float mouseScroll;      /* mouse wheel scroll since the last read (positive = up / away) */
     ModsFighter f[2];
 } ModsGame;
 

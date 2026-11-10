@@ -61,6 +61,7 @@ static SDL_SpinLock sQuickPressLock;
 /* Mouse look: deltas accumulated from SDL mouse-motion events, plus left-button state. */
 static float sMouseDx, sMouseDy;
 static int sMouseLeft;
+static float sMouseScroll;
 static SDL_SpinLock sMouseLock;
 /* Free-look yaw (radians): the view offset set by the free_look Lua mod. WASD is rotated
    by this in Port_PadRead so movement follows the view. */
@@ -207,6 +208,10 @@ static bool SDLCALL mouse_watch(void *unused, SDL_Event *ev) {
         SDL_LockSpinlock(&sMouseLock);
         sMouseLeft = ev->type == SDL_EVENT_MOUSE_BUTTON_DOWN ? 1 : 0;
         SDL_UnlockSpinlock(&sMouseLock);
+    } else if (ev->type == SDL_EVENT_MOUSE_WHEEL) {
+        SDL_LockSpinlock(&sMouseLock);
+        sMouseScroll += (float)ev->wheel.y * 60.0f;
+        SDL_UnlockSpinlock(&sMouseLock);
     }
     return true;
 }
@@ -214,7 +219,7 @@ static bool SDLCALL mouse_watch(void *unused, SDL_Event *ev) {
 /* Read and reset the accumulated mouse motion since the last call, and the left-button state. The values go
    through the pointers: the game's side of the port is built without the FPU (`-msoft-float`), so no float is
    returned across that call. */
-void PortInput_MouseRead(float *dx, float *dy, int *left) {
+void PortInput_MouseRead(float *dx, float *dy, int *left, float *scroll) {
     SDL_LockSpinlock(&sMouseLock);
     if (dx != NULL) {
         *dx = sMouseDx;
@@ -226,6 +231,10 @@ void PortInput_MouseRead(float *dx, float *dy, int *left) {
     }
     if (left != NULL) {
         *left = sMouseLeft;
+    }
+    if (scroll != NULL) {
+        *scroll = sMouseScroll;
+        sMouseScroll = 0.0f;
     }
     SDL_UnlockSpinlock(&sMouseLock);
 }

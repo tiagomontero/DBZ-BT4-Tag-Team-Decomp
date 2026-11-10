@@ -243,7 +243,7 @@ void PortMods_GameTick(void) {
         sGame.battle = sGame.f[0].found && sGame.f[1].found;
         sGame.split = sGame.battle && Battle_IsSplitScreen();
     } else { memset(sNatural,0,sizeof(sNatural)); memset(sPausedCamera,0,sizeof(sPausedCamera)); }
-    PortInput_MouseRead(&sGame.mouseDx,&sGame.mouseDy,&sGame.mouseLeft);
+    PortInput_MouseRead(&sGame.mouseDx,&sGame.mouseDy,&sGame.mouseLeft,&sGame.mouseScroll);
     Mods_Tick();
 }
 

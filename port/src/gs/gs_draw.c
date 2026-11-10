@@ -2507,8 +2507,13 @@ static float sub_curvature(const float *a, const float *b, const float *c) {
 /* Rigid triangles whose corner normals turn at least this much also take part (arms, legs, the torso);
    flatter ones (face, eyes, mouth) stay as the game draws them. */
 #define SUBDIV_CURV_MIN 0.25f
+/* Soft triangles (cloth, joints) need at least this much curvature to subdivide, so flat clothes
+   do not break into hexagon-like facets. */
+#define SOFT_CURV_MIN 0.12f
 /* Displacement of a rigid curved triangle from its curvature: full at about 50 degrees. */
 #define SUBDIV_CURV_GAIN 1.5f
+/* Soft parts move less than rigid ones when subdivided, so clothes keep their shape. */
+#define SOFT_DISP_GAIN 0.4f
 
 /* Extra vertices subdivision may add. A strip that no longer fits the frame's vertex buffer is dropped
    whole, which is what made characters (and their faces) vanish when the slider went up. So the mod
@@ -2718,11 +2723,12 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         }
         if (passes > 0) {
             float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
-            /* Soft (joints, cloth) always; rigid only where the surface is curved enough to show its
-               facets (arms, legs, torso), never a flat face quad. */
-            if (want_soft && wavg > 0.05f && wavg < 0.95f) {
+            float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
+            /* Soft (joints, cloth) only where curved enough; rigid only where the surface is curved
+               enough to show its facets (arms, legs, torso), never a flat face quad. */
+            if (want_soft && wavg > 0.05f && wavg < 0.95f && curv > SOFT_CURV_MIN) {
                 nsoft++;
-            } else if (want_rigid && sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]) > SUBDIV_CURV_MIN) {
+            } else if (want_rigid && curv > SUBDIV_CURV_MIN) {
                 nrigid++;
             }
         }
@@ -2774,7 +2780,13 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             int soft = wavg > 0.05f && wavg < 0.95f;
             float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
             float d = disp;
-            if (!soft) {
+            if (soft) {
+                /* Soft parts move less than rigid ones, so clothes keep their shape. */
+                d *= curv * SOFT_DISP_GAIN;
+                if (d > disp * SOFT_DISP_GAIN) {
+                    d = disp * SOFT_DISP_GAIN;
+                }
+            } else {
                 /* Rigid: round it only as much as it is curved, so a flat face quad is not inflated. */
                 d *= curv * SUBDIV_CURV_GAIN;
                 if (d > disp) {
@@ -2783,7 +2795,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             }
             int take = (soft ? want_soft : 0) || (!soft && want_rigid);
             if (take &&
-                (soft || (curv > SUBDIV_CURV_MIN)) &&
+                curv > (soft ? SOFT_CURV_MIN : SUBDIV_CURV_MIN) &&
                 sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], passes, d)) {
                 sSubdivUsed += sub_grid_verts(passes);
             } else {
