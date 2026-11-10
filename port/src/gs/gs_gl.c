@@ -406,6 +406,8 @@ static GLuint sDateCopy, sAuxCopy;
 static GLuint sScratchRead, sScratchDraw;
 static GLuint sFbTex[2], sFbFbo[2];
 static int sHasIndexed;
+static int sAnisoSupported;
+static float sAnisoMax;
 static const char *sGsSamplers[2] = {"tex", "dateTex"};
 static const char *sOneSampler[1] = {"aux"};
 static const char *sDclutSamplers[3] = {"depthTex", "auxTex", "clutTex"};
@@ -865,6 +867,18 @@ static int gl_init_api(int api) {
     }
     sHasClipControl = glClipControl != NULL;
     if (sHasClipControl) { glClipControl(GL_LOWER_LEFT, GL_ZERO_TO_ONE); }
+    /* Anisotropic filtering: check EXT_texture_filter_anisotropic support. */
+    sAnisoSupported = SDL_GL_ExtensionSupported("GL_EXT_texture_filter_anisotropic");
+    if (sAnisoSupported) {
+        void (*glGetFloatv)(GLenum, GLfloat *) = (void (*)(GLenum, GLfloat *))SDL_GL_GetProcAddress("glGetFloatv");
+        if (glGetFloatv) {
+            glGetFloatv(0x84FF, &sAnisoMax); /* GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT */
+            if (sAnisoMax > 16.0f) { sAnisoMax = 16.0f; }
+            fprintf(stderr, "bt3: gl: anisotropic filtering x%.0f enabled\n", sAnisoMax);
+        } else {
+            sAnisoSupported = 0;
+        }
+    }
     glEnable(GL_DEPTH_CLAMP);
     if (!sHasIndexed) { fprintf(stderr, "bt3: gl: no per-attachment blend/mask (GL 3.0 indexed): the aux byte may be wrong\n"); }
 
@@ -927,6 +941,11 @@ static int gl_init_api(int api) {
         glSamplerParameteri(sSamplers[i], GL_TEXTURE_MIN_FILTER, (i & 8) ? GL_LINEAR_MIPMAP_LINEAR : (lin ? GL_LINEAR : GL_NEAREST));
         glSamplerParameteri(sSamplers[i], GL_TEXTURE_WRAP_S, (i & 2) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
         glSamplerParameteri(sSamplers[i], GL_TEXTURE_WRAP_T, (i & 4) ? GL_CLAMP_TO_EDGE : GL_REPEAT);
+        /* Anisotropic filtering: smoother textures at grazing angles (clothes, skin sides).
+           Only applied when the driver supports it; clamped to the hardware maximum. */
+        if (sAnisoSupported) {
+            glSamplerParameterf(sSamplers[i], GL_TEXTURE_MAX_ANISOTROPY_EXT, sAnisoMax);
+        }
     }
     glGenTextures(1, &sWhite);
     glBindTexture(GL_TEXTURE_2D, sWhite);
