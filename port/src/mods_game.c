@@ -107,7 +107,8 @@ void Port_ModsFaceGestures(int objId) {
     extern int BtlObj_GetMouthMode(void GAME_PTR obj);
     extern int BtlObj_GetEyeFrame(void GAME_PTR obj);
     const ModsLook *look = Mods_Look();
-    uint8_t GAME_PTR obj, chr, eyes;
+    uint8_t GAME_PTR obj, chr;
+    uint32_t eyes;
 
     if (gPortResim || objId < 0 || objId >= BTL_OBJ_COUNT) {
         return;
@@ -121,8 +122,8 @@ void Port_ModsFaceGestures(int objId) {
         if (BtlObj_GetMouthMode(obj) != FACE_CHARGE_MOUTH) { /* (this frame's own events may have changed it) */
             BtlObj_SetSubState(obj, FACE_CHARGE_MOUTH, 0);
         }
-        eyes = *(uint8_t GAME_PTR GAME_PTR)(obj + BOBJ_EYES);
-        if (eyes != NULL && *(uint32_t GAME_PTR)eyes >= FACE_CHARGE_EYE) { /* (the table's first word: how many) */
+        eyes = *(uint32_t GAME_PTR)(obj + BOBJ_EYES); /* (the eye table's game address, 0: no eyes) */
+        if (eyes != 0 && *(const uint32_t *)Port_Ptr(eyes) >= FACE_CHARGE_EYE) { /* (its first word: how many) */
             BtlObj_SetEyeFrame(obj, FACE_CHARGE_EYE);
         }
         sFaceOwn[objId] = 1;
