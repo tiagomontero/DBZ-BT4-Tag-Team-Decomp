@@ -2691,12 +2691,18 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     d.first = gsVuIdxCount;
 
     /* BT4 visual mod: CPU subdivision of fighter meshes (layers 0, 1).
-       `subdiv` 0 = off. 1..100 maps to up to 3 subdivision passes plus normal
-       displacement for real curvature, not just more flat triangles. */
+       `subdiv` 0 = off. 1..100 maps to up to 2 subdivision passes plus normal
+       displacement for real curvature, not just more flat triangles.
+       `subdiv_mode` chooses where: 0 = all, 1 = soft only, 2 = rigid only, 3 = off. */
     int passes = 0;
     float disp = 0.0f;
-    if (Mods_Look()->subdiv > 0 && (layer == 0 || layer == 1)) {
-        passes = Mods_Look()->subdiv > 66 ? 3 : Mods_Look()->subdiv > 33 ? 2 : 1;
+    int mode = Mods_Look()->subdiv_mode;
+    int want_soft = 1, want_rigid = 1;
+    if (mode == 1) { want_rigid = 0; }
+    else if (mode == 2) { want_soft = 0; }
+    else if (mode == 3) { want_soft = 0; want_rigid = 0; }
+    if (Mods_Look()->subdiv > 0 && mode != 3 && (layer == 0 || layer == 1)) {
+        passes = Mods_Look()->subdiv > 50 ? 2 : Mods_Look()->subdiv > 25 ? 1 : 0;
         /* Monotonic: a sawtooth here made the model pop when the slider crossed 34 or 67. */
         disp = (float)Mods_Look()->subdiv / 100.0f * 0.05f;
     }
@@ -2714,9 +2720,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
             /* Soft (joints, cloth) always; rigid only where the surface is curved enough to show its
                facets (arms, legs, torso), never a flat face quad. */
-            if (wavg > 0.05f && wavg < 0.95f) {
+            if (want_soft && wavg > 0.05f && wavg < 0.95f) {
                 nsoft++;
-            } else if (sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]) > SUBDIV_CURV_MIN) {
+            } else if (want_rigid && sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]) > SUBDIV_CURV_MIN) {
                 nrigid++;
             }
         }
@@ -2724,7 +2730,6 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     nsub = nsoft + nrigid;
 
     int doSubdiv = passes > 0 && nsub > 0;
-    int rigid = 1;
     if (doSubdiv) {
         /* The mod's own slice of the frame's buffer. No strip is ever dropped for want of room: it just
            gets fewer passes (or the game's own triangles). */
@@ -2743,7 +2748,6 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             /* The curved rigid parts (arms, legs, torso) need more than the frame has left. Then the joints
                and the cloth still get their extra polygons: they are what the mod is really for. */
             passes = 1;
-            rigid = 0;
         }
         if (passes == 0) {
             doSubdiv = 0;
@@ -2777,7 +2781,9 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                     d = disp;
                 }
             }
-            if ((soft || (rigid && curv > SUBDIV_CURV_MIN)) &&
+            int take = (soft ? want_soft : 0) || (!soft && want_rigid);
+            if (take &&
+                (soft || (curv > SUBDIV_CURV_MIN)) &&
                 sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], passes, d)) {
                 sSubdivUsed += sub_grid_verts(passes);
             } else {

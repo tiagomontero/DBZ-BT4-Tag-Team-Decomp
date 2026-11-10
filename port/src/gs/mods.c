@@ -821,6 +821,19 @@ static int l_look(lua_State *L) {
         }
     }
     lua_pop(L, 1);
+    lua_getfield(L, 1, "subdiv_mode");
+    if (!lua_isnil(L, -1)) {
+        const char *v = luaL_checkstring(L, -1);
+        int n = 0;
+        if (strcmp(v, "suave") == 0) n = 1;
+        else if (strcmp(v, "rigido") == 0) n = 2;
+        else if (strcmp(v, "apagado") == 0) n = 3;
+        else n = 0; /* "todo" */
+        if (n > sLookBuild.subdiv_mode) {
+            sLookBuild.subdiv_mode = n;
+        }
+    }
+    lua_pop(L, 1);
     lua_getfield(L, 1, "jiggle");
     if (!lua_isnil(L, -1)) {
         lua_Number v = luaL_checknumber(L, -1);
