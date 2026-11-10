@@ -45,6 +45,7 @@ extern int TagBattle_Active(void),TagBattle_Count(void),TagBattle_ViewActor(void
 extern int BattleSide_GetObjId(int side);
 extern int PortSpectator_Mode(void);
 extern int BtlCharApi_GetChara(int objId);
+extern int BtlAct_GetCurrent(void GAME_PTR chr);
 /* gs/ui.h declares this, but it also pulls in SDL3's headers, which only the files under gs/ are built with; and
    the values come back through pointers, not as a float return, because this file is built without the FPU. */
 extern void PortInput_MouseRead(float *dx, float *dy, int *left, float *scroll);
