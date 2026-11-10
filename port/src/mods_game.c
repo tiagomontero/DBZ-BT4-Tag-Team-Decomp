@@ -45,7 +45,7 @@ extern int PortSpectator_Mode(void);
 extern int BtlCharApi_GetChara(int objId);
 /* gs/ui.h declares this, but it also pulls in SDL3's headers, which only the files under gs/ are built with; and
    the values come back through pointers, not as a float return, because this file is built without the FPU. */
-extern void PortInput_MouseRead(float *dx, float *dy, int *left);
+extern void PortInput_MouseRead(float *dx, float *dy, int *left, float *scroll);
 
 int PortMods_ViewActor(int side) {
     int own,target,count;
