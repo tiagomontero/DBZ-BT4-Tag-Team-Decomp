@@ -18,9 +18,9 @@ typedef struct ModsFighter {
 typedef struct ModsGame {
     int battle;    /* a battle's fighters are there */
     int split;     /* split-screen layout */
-    float mouseDx, mouseDy; /* accumulated mouse motion since the last read (pixels) */
-    int mouseLeft;          /* left mouse button: 1 while held */
-    float mouseScroll;      /* mouse wheel scroll since the last read (positive = up / away) */
+    float mouseDx, mouseDy;   /* accumulated mouse motion since the last read (pixels) */
+    int mouseLeft;            /* left mouse button: 1 while held */
+    float mouseScroll;        /* mouse wheel scroll since the last read (positive = up / away) */
     ModsFighter f[2];
 } ModsGame;
 
@@ -125,6 +125,8 @@ typedef struct ModsLook {
     int subdiv_soft;   /* BT4 visual mod: 0 = off, 1..100 = subdivision passes for soft parts (cloth, joints) */
     int subdiv_rigid;  /* BT4 visual mod: 0 = off, 1..100 = subdivision passes for rigid parts (arms, legs, torso) */
     int toon_sharpen;  /* BT4 visual mod: 0 = off, 1..100 = sharpen toon shading edges for more definition */
+    int mesh_smooth;   /* BT4 visual mod: 0 = off, 1..100 = automatic mesh subdivision for all character parts (smooths polygonal look) */
+    int outline_strength; /* BT4 visual mod: 0 = off, 1..100 = contour outline around fighters for sharper, more defined look */
     int jiggle;   /* BT4 visual mod: 0 = the game's own, 1..100 = how much stronger the game's hair/cloth chains swing */
     int face;     /* BT4 visual mod: 0 = the game's own face, > 0 = the game's mouth-open face and serious eyes while a
                      fighter charges ki (the states its own animation events use; nothing of the fight reads them) */

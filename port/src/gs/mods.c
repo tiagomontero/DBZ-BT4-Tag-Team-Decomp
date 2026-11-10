@@ -839,6 +839,24 @@ static int l_look(lua_State *L) {
         }
     }
     lua_pop(L, 1);
+    lua_getfield(L, 1, "mesh_smooth");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.mesh_smooth) {
+            sLookBuild.mesh_smooth = n;
+        }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "outline_strength");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.outline_strength) {
+            sLookBuild.outline_strength = n;
+        }
+    }
+    lua_pop(L, 1);
     lua_getfield(L, 1, "jiggle");
     if (!lua_isnil(L, -1)) {
         lua_Number v = luaL_checknumber(L, -1);
