@@ -944,7 +944,7 @@ static int gl_init_api(int api) {
         /* Anisotropic filtering: smoother textures at grazing angles (clothes, skin sides).
            Only applied when the driver supports it; clamped to the hardware maximum. */
         if (sAnisoSupported) {
-            glSamplerParameterf(sSamplers[i], GL_TEXTURE_MAX_ANISOTROPY_EXT, sAnisoMax);
+            glSamplerParameterf(sSamplers[i], 0x84FF, sAnisoMax); /* GL_TEXTURE_MAX_ANISOTROPY_EXT */
         }
     }
     glGenTextures(1, &sWhite);
