@@ -33,6 +33,7 @@
 #include "../../include/port_render_markers.h"
 #include "menu_wide_layout.h"
 #include "menu_panel_layout.h"
+#include "gs/mods_particles.h"
 static uint32_t sPresentationObject;
 #include "ui.h"         /* PortVideo and the window helpers */
 #include "gs_texpack.h" /* texture packs (replacement textures) */
@@ -6076,6 +6077,8 @@ void GsGpu_FrameEnd(void) {
                 }
             }
             t1 = gpu_now();
+            /* Dibujar partículas de mods (burbujas de soda al cargar ki) */
+            ModsParticles_Draw();
             sBackend->frameEnd();
             interp_cost(gpu_now() - t1);
             interp_present_log('S');
@@ -6093,3 +6096,74 @@ void GsGpu_FrameEnd(void) {
     gGpuEndNs += gpu_now() - t0;
     skip_decide();
 }
+
+/* ----------------------------------------------------------------- Partículas de mods (burbujas de soda) */
+/* Proyección 3D a 2D muy simple: asume que el personaje está cerca del centro de la pantalla.
+   No es una proyección real de cámara, pero sirve para ver las burbujas flotando. */
+static void particle_project(float x, float y, float z, float *sx, float *sy) {
+    *sx = 0.5f + x * 0.003f;
+    *sy = 0.5f - z * 0.003f;
+    if (*sx < 0.0f) *sx = 0.0f;
+    if (*sx > 1.0f) *sx = 1.0f;
+    if (*sy < 0.0f) *sy = 0.0f;
+    if (*sy > 1.0f) *sy = 1.0f;
+}
+
+void ModsParticles_Draw(void) {
+    int i, j;
+    int numVerts = 0;
+    int firstVert;
+    GsVertex dummy;
+
+    /* Contar vértices necesarios (4 por burbuja activa) */
+    for (i = 0; i < MODS_PARTICLES_MAX; i++) {
+        if (sModsParticles[i].active) {
+            numVerts += 4;
+        }
+    }
+    if (numVerts == 0) {
+        return;
+    }
+    if (gsVertCount + numVerts > MAX_VERTS || gsDrawCount >= MAX_DRAWS) {
+        return;
+    }
+
+    dummy.z = 0.0f;
+    dummy.q = 1.0f;
+
+    firstVert = gsVertCount;
+
+    /* Agregar 4 vértices por burbuja (cuadrado pequeño) */
+    for (i = 0; i < MODS_PARTICLES_MAX; i++) {
+        ModsParticle *p = &sModsParticles[i];
+        if (!p->active) {
+            continue;
+        }
+
+        float sx, sy;
+        float size = p->size * 0.5f;
+        uint8_t alpha = (uint8_t)(p->life * 180); /* alpha basado en vida */
+
+        particle_project(p->x, p->y, p->z, &sx, &sy);
+
+        /* 4 esquinas del cuadrado */
+        put(&dummy, sx - size, sy - size, 0.0f, 0.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
+        put(&dummy, sx + size, sy - size, 1.0f, 0.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
+        put(&dummy, sx + size, sy + size, 1.0f, 1.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
+        put(&dummy, sx - size, sy + size, 0.0f, 1.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
+    }
+
+    /* Crear un GsDraw para dibujar todas las burbujas como un triángulo-strip */
+    {
+        GsDraw d;
+        memset(&d, 0, sizeof(d));
+        d.native = 0;
+        d.target = GsDraw_TargetGet((uint32_t)gGsMainFbp, 1);
+        d.first = firstVert;
+        d.count = numVerts;
+        d.pipeline = pipeline_get(0, 0, 0, 0);
+        d.object = sPresentationObject;
+        gsDraws[gsDrawCount++] = d;
+    }
+}
+

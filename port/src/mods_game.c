@@ -22,6 +22,7 @@
 
 #include "gs/mods.h"
 #include "port_addr.h"
+#include "gs/mods_particles.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && defined(__clang__)
 #undef __ptr32 /* the Windows headers of mingw define these two away */
@@ -258,6 +259,7 @@ void Port_NaturalFightCamera(int objId,int pos,int rot) {
 void PortMods_GameTick(void) {
     int side;
     uint8_t GAME_PTR chr;
+    static int particleTimer[2] = {0, 0};
 
     if (gPortResim) {
         return;
@@ -270,12 +272,28 @@ void PortMods_GameTick(void) {
                 sGame.f[side].found = 1;
                 rdf(sGame.f[side].pos, chr, CHR_POSE, 3);
                 rdf(&sGame.f[side].yaw, chr, CHR_POSE + POSE_YAW, 1);
+                sGame.f[side].action = BtlAct_GetCurrent(chr);
+                /* Generar burbujas de soda al cargar ki (acción 0x37) */
+                if (sGame.f[side].action == 0x37) {
+                    particleTimer[side]++;
+                    if (particleTimer[side] >= 4) { /* una burbuja cada 4 frames */
+                        particleTimer[side] = 0;
+                        /* Burbuja cerca del personaje, con ligero desplazamiento aleatorio */
+                        float bx = sGame.f[side].pos[0] + ((float)(particleTimer[side] * 7 % 100) - 50.0f) * 0.1f;
+                        float by = sGame.f[side].pos[1] + 30.0f; /* por encima del personaje */
+                        float bz = sGame.f[side].pos[2] + ((float)(particleTimer[side] * 13 % 100) - 50.0f) * 0.1f;
+                        ModsParticles_Add(bx, by, bz, 6.0f + (float)(particleTimer[side] % 5) * 2.0f);
+                    }
+                } else {
+                    particleTimer[side] = 0;
+                }
             }
         }
         sGame.battle = sGame.f[0].found && sGame.f[1].found;
         sGame.split = sGame.battle && Battle_IsSplitScreen();
     } else { memset(sNatural,0,sizeof(sNatural)); memset(sPausedCamera,0,sizeof(sPausedCamera)); }
     PortInput_MouseRead(&sGame.mouseDx,&sGame.mouseDy,&sGame.mouseLeft,&sGame.mouseScroll);
+    ModsParticles_Update();
     Mods_Tick();
 }
 
@@ -357,3 +375,44 @@ void Port_ModsCamera(int side, int objId, int pos, int rot, int paused) {
         sCollide[side] = sCam.collide;
     }
 }
+
+/* ----------------------------------------------------------------- Partículas de mods (burbujas de soda) */
+
+ModsParticle sModsParticles[MODS_PARTICLES_MAX];
+
+void ModsParticles_Add(float x, float y, float z, float size) {
+    int i;
+    for (i = 0; i < MODS_PARTICLES_MAX; i++) {
+        if (!sModsParticles[i].active) {
+            sModsParticles[i].active = 1;
+            sModsParticles[i].x = x;
+            sModsParticles[i].y = y;
+            sModsParticles[i].z = z;
+            sModsParticles[i].vx = ((float)(rand() % 200) - 100.0f) * 0.05f;
+            sModsParticles[i].vy = 2.0f + (float)(rand() % 50) * 0.1f; /* subir */
+            sModsParticles[i].vz = ((float)(rand() % 200) - 100.0f) * 0.05f;
+            sModsParticles[i].size = size;
+            sModsParticles[i].life = 1.0f;
+            return;
+        }
+    }
+}
+
+void ModsParticles_Update(void) {
+    int i;
+    for (i = 0; i < MODS_PARTICLES_MAX; i++) {
+        ModsParticle *p = &sModsParticles[i];
+        if (!p->active) {
+            continue;
+        }
+        p->x += p->vx;
+        p->y += p->vy;
+        p->z += p->vz;
+        p->vy += 0.1f; /* ligera aceleración hacia arriba */
+        p->life -= 0.02f; /* ~50 frames de vida */
+        if (p->life <= 0.0f) {
+            p->active = 0;
+        }
+    }
+}
+
