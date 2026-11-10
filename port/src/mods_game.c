@@ -101,6 +101,7 @@ int Port_ModsChainGain(void) {
 #define FACE_CHARGE_MOUTH 10    /* BOBJ_MOUTH_HOLD_OPEN */
 #define FACE_CHARGE_EYE 2       /* the frame the game's animation event 0x800000000000000 forces */
 static unsigned char sFaceOwn[BTL_OBJ_COUNT]; /* the mouth / eyes of this object are the ones this put there */
+static int sChargeTimer[BTL_OBJ_COUNT];       /* frames que lleva cargando ki este objeto (para animar boca y ojos) */
 
 /* Expresiones de cara al cargar ki, por personaje (chara ID).
    Completa esta tabla con los IDs reales de cada personaje y la boca / ojos
@@ -141,6 +142,7 @@ void Port_ModsFaceGestures(int objId) {
     int chara;
     int mouth = FACE_CHARGE_MOUTH;
     int eye = FACE_CHARGE_EYE;
+    int charging;
 
     if (gPortResim || objId < 0 || objId >= BTL_OBJ_COUNT) {
         return;
@@ -150,23 +152,63 @@ void Port_ModsFaceGestures(int objId) {
         return;
     }
     chr = (uint8_t GAME_PTR)BtlChar_FindByObjId(objId);
-    if (chr != NULL && look != NULL && look->face > 0 && BtlAct_GetCurrent(chr) == FACE_CHARGE_ACTION) {
+    charging = (chr != NULL && look != NULL && look->face > 0 && BtlAct_GetCurrent(chr) == FACE_CHARGE_ACTION);
+    if (charging) {
         chara = BtlCharApi_GetChara(objId);
         fprintf(stderr, "BT4 visual: objId=%d chara=%d charging ki\n", objId, chara);
         if (face_expr_for_chara(chara, &mouth, &eye)) {
             /* expresión personalizada para este personaje */
         }
-        if (BtlObj_GetMouthMode(obj) != mouth) { /* (this frame's own events may have changed it) */
-            BtlObj_SetSubState(obj, mouth, 0);
+        /* Animación dinámica mientras carga ki: boca alterna entre expresión y forma intermedia,
+           ojos parpadean periódicamente. sChargeTimer cuenta frames de carga acumulada. */
+        sChargeTimer[objId]++;
+        if ((sChargeTimer[objId] / 6) % 2 == 0) {
+            /* Boca principal (abierta o personalizada) */
+            if (BtlObj_GetMouthMode(obj) != mouth) {
+                BtlObj_SetSubState(obj, mouth, 0);
+            }
+        } else {
+            /* Boca intermedia (menos abierta) para dar sensación de esfuerzo */
+            if (BtlObj_GetMouthMode(obj) != BOBJ_MOUTH_SHAPE_1) {
+                BtlObj_SetSubState(obj, BOBJ_MOUTH_SHAPE_1, 0);
+            }
         }
         eyes = *(uint32_t GAME_PTR)(obj + BOBJ_EYES); /* (the eye table's game address, 0: no eyes) */
         if (eyes != 0 && *(const uint32_t *)Port_Ptr(eyes) >= eye) { /* (its first word: how many) */
-            BtlObj_SetEyeFrame(obj, eye);
+            /* Parpadeo de ojos cada 15 frames: alternar entre expresión y parpadeo (9) */
+            if ((sChargeTimer[objId] / 15) % 2 == 0) {
+                BtlObj_SetEyeFrame(obj, eye);
+            } else {
+                BtlObj_SetEyeFrame(obj, 9); /* parpadeo / volver a normal */
+            }
         }
         sFaceOwn[objId] = 1;
         return;
     }
+    /* Ya no carga ki: si el mod era el dueño de la cara, hacer un gesto de descarga
+       (boca abierta grande + ojos abiertos brevemente) antes de devolver al juego. */
     if (!sFaceOwn[objId]) {
+        return;
+    }
+    if (sChargeTimer[objId] > 0) {
+        /* Gesto de descarga: boca abierta grande y ojos abiertos durante unos frames */
+        if (sChargeTimer[objId] < 10) {
+            if (BtlObj_GetMouthMode(obj) != FACE_CHARGE_MOUTH) {
+                BtlObj_SetSubState(obj, FACE_CHARGE_MOUTH, 0);
+            }
+            if (BtlObj_GetEyeFrame(obj) != 1) { /* ojos abiertos (frame 1) */
+                BtlObj_SetEyeFrame(obj, 1);
+            }
+        } else {
+            /* Volver a reposo */
+            if (BtlObj_GetMouthMode(obj) == FACE_CHARGE_MOUTH) {
+                BtlObj_SetSubState(obj, 0, 0);
+            }
+            if (BtlObj_GetEyeFrame(obj) == 1) {
+                BtlObj_SetEyeFrame(obj, 9); /* (9: the eyes go back to blinking) */
+            }
+        }
+        sChargeTimer[objId]--;
         return;
     }
     if (BtlObj_GetMouthMode(obj) == mouth) {
