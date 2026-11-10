@@ -299,7 +299,8 @@ def main():
         else:
             r = run(cmd + [str(f), "-o", str(o)], cwd=ROOT, capture_output=True, text=True)
         if r.returncode:
-            print("FAILED", f.name, r.stderr.splitlines()[0][:150])
+            lines = r.stderr.splitlines()
+            print("FAILED", f.name, next((l for l in lines if "error" in l), lines[0] if lines else "")[:200])
         else:
             objs.append(str(o))
             if getattr(r, "pending", None):
