@@ -2665,7 +2665,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     /* BT4 visual mod: filtered (bilinear + mipmap) textures on subdivided fighter meshes,
        so skin and clothes stay smooth instead of pixelated between the new triangles. */
     sToonWanted = 0;
-    if (Mods_Look()->subdiv > 0) {
+    if (Mods_Look()->subdiv_soft > 0 || Mods_Look()->subdiv_rigid > 0) {
         d.sampler |= 1 | 8; /* bit 0 = linear min/mag filter; bit 3 = mipmap linear */
     }
     if (layer == 2 && d.misc[1] == 1.0f && d.misc[2] != 0.0f) {
@@ -2696,20 +2696,20 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     d.first = gsVuIdxCount;
 
     /* BT4 visual mod: CPU subdivision of fighter meshes (layers 0, 1).
-       `subdiv` 0 = off. 1..100 maps to up to 2 subdivision passes plus normal
-       displacement for real curvature, not just more flat triangles.
-       `subdiv_mode` chooses where: 0 = all, 1 = soft only, 2 = rigid only, 3 = off. */
-    int passes = 0;
-    float disp = 0.0f;
-    int mode = Mods_Look()->subdiv_mode;
-    int want_soft = 1, want_rigid = 1;
-    if (mode == 1) { want_rigid = 0; }
-    else if (mode == 2) { want_soft = 0; }
-    else if (mode == 3) { want_soft = 0; want_rigid = 0; }
-    if (Mods_Look()->subdiv > 0 && mode != 3 && (layer == 0 || layer == 1)) {
-        passes = Mods_Look()->subdiv > 50 ? 2 : Mods_Look()->subdiv > 25 ? 1 : 0;
-        /* Monotonic: a sawtooth here made the model pop when the slider crossed 34 or 67. */
-        disp = (float)Mods_Look()->subdiv / 100.0f * 0.05f;
+       `subdiv_soft` 0 = off, 1..100 = passes for soft parts (cloth, joints).
+       `subdiv_rigid` 0 = off, 1..100 = passes for rigid parts (arms, legs, torso).
+       Each has its own pass count and displacement. */
+    int passes_soft = 0, passes_rigid = 0;
+    float disp_soft = 0.0f, disp_rigid = 0.0f;
+    int want_soft = Mods_Look()->subdiv_soft > 0;
+    int want_rigid = Mods_Look()->subdiv_rigid > 0;
+    if (want_soft && (layer == 0 || layer == 1)) {
+        passes_soft = Mods_Look()->subdiv_soft > 50 ? 2 : Mods_Look()->subdiv_soft > 25 ? 1 : 0;
+        disp_soft = (float)Mods_Look()->subdiv_soft / 100.0f * 0.05f;
+    }
+    if (want_rigid && (layer == 0 || layer == 1)) {
+        passes_rigid = Mods_Look()->subdiv_rigid > 50 ? 2 : Mods_Look()->subdiv_rigid > 25 ? 1 : 0;
+        disp_rigid = (float)Mods_Look()->subdiv_rigid / 100.0f * 0.05f;
     }
 
     uint32_t nsoft = 0, nrigid = 0, nsub;
@@ -2721,7 +2721,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                 continue;
             }
         }
-        if (passes > 0) {
+        if (passes_soft > 0 || passes_rigid > 0) {
             float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
             float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
             /* Soft (joints, cloth) only where curved enough; rigid only where the surface is curved
@@ -2735,7 +2735,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     }
     nsub = nsoft + nrigid;
 
-    int doSubdiv = passes > 0 && nsub > 0;
+    int doSubdiv = (passes_soft > 0 || passes_rigid > 0) && nsub > 0;
     if (doSubdiv) {
         /* The mod's own slice of the frame's buffer. No strip is ever dropped for want of room: it just
            gets fewer passes (or the game's own triangles). */
@@ -2747,15 +2747,14 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         if (room > SUBDIV_STRIP_VERTS) {
             room = SUBDIV_STRIP_VERTS;
         }
-        while (passes > 0 && !sub_fits(nsub, passes, room, roomV, roomI)) {
-            passes--;
+        /* Reduce passes if the strip does not fit, trying soft first then rigid. */
+        while (passes_soft > 0 && !sub_fits(nsoft, passes_soft, room, roomV, roomI)) {
+            passes_soft--;
         }
-        if (passes == 0 && nsoft > 0 && sub_fits(nsoft, 1, room, roomV, roomI)) {
-            /* The curved rigid parts (arms, legs, torso) need more than the frame has left. Then the joints
-               and the cloth still get their extra polygons: they are what the mod is really for. */
-            passes = 1;
+        while (passes_rigid > 0 && !sub_fits(nrigid, passes_rigid, room, roomV, roomI)) {
+            passes_rigid--;
         }
-        if (passes == 0) {
+        if (passes_soft == 0 && passes_rigid == 0) {
             doSubdiv = 0;
         }
     }
@@ -2779,25 +2778,20 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
             float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
             int soft = wavg > 0.05f && wavg < 0.95f;
             float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
-            float d = disp;
-            if (soft) {
-                /* Soft parts move less than rigid ones, so clothes keep their shape. */
-                d *= curv * SOFT_DISP_GAIN;
-                if (d > disp * SOFT_DISP_GAIN) {
-                    d = disp * SOFT_DISP_GAIN;
-                }
-            } else {
-                /* Rigid: round it only as much as it is curved, so a flat face quad is not inflated. */
-                d *= curv * SUBDIV_CURV_GAIN;
-                if (d > disp) {
-                    d = disp;
-                }
+            int take = 0;
+            int my_passes = 0;
+            float my_disp = 0.0f;
+            if (soft && want_soft && passes_soft > 0 && curv > SOFT_CURV_MIN) {
+                take = 1;
+                my_passes = passes_soft;
+                my_disp = disp_soft;
+            } else if (!soft && want_rigid && passes_rigid > 0 && curv > SUBDIV_CURV_MIN) {
+                take = 1;
+                my_passes = passes_rigid;
+                my_disp = disp_rigid;
             }
-            int take = (soft ? want_soft : 0) || (!soft && want_rigid);
-            if (take &&
-                curv > (soft ? SOFT_CURV_MIN : SUBDIV_CURV_MIN) &&
-                sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], passes, d)) {
-                sSubdivUsed += sub_grid_verts(passes);
+            if (take && sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], my_passes, my_disp)) {
+                sSubdivUsed += sub_grid_verts(my_passes);
             } else {
                 gsVuIdx[gsVuIdxCount++] = base + i;
                 gsVuIdx[gsVuIdxCount++] = base + i + 1;

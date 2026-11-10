@@ -122,8 +122,9 @@ int Mods_HudHidden(void);                     /* any thread: the game's HUD piec
 typedef struct ModsLook {
     int shading, rim, vivid, ambient, energy, energy_light;
     unsigned rim_color;
-    int subdiv;   /* BT4 visual mod: 0 = off, 1..100 = CPU subdivision passes of fighter meshes (smoother silhouettes) */
-    int subdiv_mode; /* BT4 visual mod: 0 = todo, 1 = solo suave, 2 = solo rigido, 3 = apagado */
+    int subdiv_soft;   /* BT4 visual mod: 0 = off, 1..100 = subdivision passes for soft parts (cloth, joints) */
+    int subdiv_rigid;  /* BT4 visual mod: 0 = off, 1..100 = subdivision passes for rigid parts (arms, legs, torso) */
+    int toon_sharpen;  /* BT4 visual mod: 0 = off, 1..100 = sharpen toon shading edges for more definition */
     int jiggle;   /* BT4 visual mod: 0 = the game's own, 1..100 = how much stronger the game's hair/cloth chains swing */
     int face;     /* BT4 visual mod: 0 = the game's own face, > 0 = the game's mouth-open face and serious eyes while a
                      fighter charges ki (the states its own animation events use; nothing of the fight reads them) */

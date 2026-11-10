@@ -19,12 +19,12 @@ end
 
 return {
     name = "Free look: personaje pivote",
-    version = "1.4",
+    version = "1.5",
     author = "BT4decomp",
     description = "El personaje es el pivote. El mouse orbita alrededor de él; la rueda hace zoom. El personaje avanza hacia donde mira la cámara (W).",
     settings = {
         { id = "enable", label = "Activar free look", type = "toggle", default = 1 },
-        { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 10, max = 300, step = 5, default = 100 },
+        { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 10, max = 500, step = 5, default = 150 },
         { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
         { id = "height", label = "Altura sobre el personaje", type = "slider", min = 50, max = 700, step = 25, default = 220 },
         { id = "pitch", label = "Ángulo vertical (desde arriba)", type = "slider", min = -80, max = -15, step = 5, default = -30 },
@@ -63,7 +63,7 @@ return {
         local dy = m.dy or 0
         local scroll = m.scroll or 0
 
-        local sens = bt3.setting("sens") * 0.0005
+        local sens = bt3.setting("sens") * 0.0008
         self.ang.yaw = wrap(self.ang.yaw + dx * sens)
         self.ang.pitch = clamp(self.ang.pitch - dy * sens, -pi / 2 + 0.05, -0.15)
 

@@ -812,25 +812,30 @@ static int l_look(lua_State *L) {
         sLookBuild.rim_color = (unsigned)luaL_checkinteger(L, -1);
     }
     lua_pop(L, 1);
-    lua_getfield(L, 1, "subdiv");
+    lua_getfield(L, 1, "subdiv_soft");
     if (!lua_isnil(L, -1)) {
         lua_Number v = luaL_checknumber(L, -1);
         int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
-        if (n > sLookBuild.subdiv) {
-            sLookBuild.subdiv = n;
+        if (n > sLookBuild.subdiv_soft) {
+            sLookBuild.subdiv_soft = n;
         }
     }
     lua_pop(L, 1);
-    lua_getfield(L, 1, "subdiv_mode");
+    lua_getfield(L, 1, "subdiv_rigid");
     if (!lua_isnil(L, -1)) {
-        const char *v = luaL_checkstring(L, -1);
-        int n = 0;
-        if (strcmp(v, "suave") == 0) n = 1;
-        else if (strcmp(v, "rigido") == 0) n = 2;
-        else if (strcmp(v, "apagado") == 0) n = 3;
-        else n = 0; /* "todo" */
-        if (n > sLookBuild.subdiv_mode) {
-            sLookBuild.subdiv_mode = n;
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.subdiv_rigid) {
+            sLookBuild.subdiv_rigid = n;
+        }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "toon_sharpen");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.toon_sharpen) {
+            sLookBuild.toon_sharpen = n;
         }
     }
     lua_pop(L, 1);
