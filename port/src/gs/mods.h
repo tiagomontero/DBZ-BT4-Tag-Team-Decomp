@@ -13,6 +13,7 @@ typedef struct ModsFighter {
     int found;
     float pos[3];  /* world position (the pose block, chr + 0x10); +Y is down */
     float yaw;     /* facing (radians) */
+    int action;    /* current action (0x37: charging ki) */
 } ModsFighter;
 
 typedef struct ModsGame {

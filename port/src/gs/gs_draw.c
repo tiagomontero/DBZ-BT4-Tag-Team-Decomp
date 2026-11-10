@@ -33,7 +33,7 @@
 #include "../../include/port_render_markers.h"
 #include "menu_wide_layout.h"
 #include "menu_panel_layout.h"
-#include "gs/mods_particles.h"
+#include "mods_particles.h"
 static uint32_t sPresentationObject;
 #include "ui.h"         /* PortVideo and the window helpers */
 #include "gs_texpack.h" /* texture packs (replacement textures) */
