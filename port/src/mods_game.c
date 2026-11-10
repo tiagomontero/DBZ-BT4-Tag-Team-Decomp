@@ -49,6 +49,7 @@ extern int BtlAct_GetCurrent(void GAME_PTR chr);
 /* gs/ui.h declares this, but it also pulls in SDL3's headers, which only the files under gs/ are built with; and
    the values come back through pointers, not as a float return, because this file is built without the FPU. */
 extern void PortInput_MouseRead(float *dx, float *dy, int *left, float *scroll);
+extern int Port_Rand(void);
 
 int PortMods_ViewActor(int side) {
     int own,target,count;
@@ -389,9 +390,9 @@ void ModsParticles_Add(float x, float y, float z, float size) {
             sModsParticles[i].x = x;
             sModsParticles[i].y = y;
             sModsParticles[i].z = z;
-            sModsParticles[i].vx = ((float)(rand() % 200) - 100.0f) * 0.05f;
-            sModsParticles[i].vy = 2.0f + (float)(rand() % 50) * 0.1f; /* subir */
-            sModsParticles[i].vz = ((float)(rand() % 200) - 100.0f) * 0.05f;
+            sModsParticles[i].vx = ((float)(Port_Rand() % 200) - 100.0f) * 0.05f;
+            sModsParticles[i].vy = 2.0f + (float)(Port_Rand() % 50) * 0.1f; /* subir */
+            sModsParticles[i].vz = ((float)(Port_Rand() % 200) - 100.0f) * 0.05f;
             sModsParticles[i].size = size;
             sModsParticles[i].life = 1.0f;
             return;
