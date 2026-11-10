@@ -32,9 +32,12 @@ return {
         end
 
         -- Elegir personaje activo: prioridad al lado 0, si no existe el lado 1
-        local p = game.f[0]
-        if not p or not p.found then
-            p = game.f[1]
+        local p = nil
+        if game.f then
+            p = game.f[0]
+            if not p or not p.found then
+                p = game.f[1]
+            end
         end
         if not p or not p.found then
             bt3.set_free_look_yaw(0)
