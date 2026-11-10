@@ -318,7 +318,7 @@ int main(void) {
         FILE *ef;
         snprintf(ex, sizeof(ex), "%s-examples.txt", sDir);
         ef = fopen(ex, "w");
-        fputs("example_camera=1\nexample_hud=1\nmodern_camera=1\nmodern_hud=1\nmodern_look=1\nskill_list=1\n", ef);
+        fputs("example_camera=1\nexample_hud=1\nfree_look=1\nmodern_camera=1\nmodern_hud=1\nmodern_look=1\nskill_list=1\n", ef);
         fclose(ef);
         setenv("BT3_MODS_SETTINGS", ex, 1);
     }
@@ -342,7 +342,7 @@ int main(void) {
     }
     CHECK(moved >= 90);
     }
-    CHECK(Mods_Count() == 6); /* (example_camera, example_hud, modern_camera, modern_hud, modern_look, skill_list) */
+    CHECK(Mods_Count() == 7); /* (example_camera, example_hud, free_look, modern_camera, modern_hud, modern_look, skill_list) */
     CHECK(Mods_Look()->shading == 100 && Mods_Look()->energy_light == 50); /* (modern_look at its defaults) */
     for (i = 0; i < Mods_Count(); i++) {
         CHECK(Mods_Info(i)->error[0] == '\0');
