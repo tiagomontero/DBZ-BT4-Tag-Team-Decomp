@@ -2476,9 +2476,39 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 
 /* ----------------------------------------------------------------- BT4 visual mod: mesh subdivision helpers */
 
-/* Displacement strength applied to the interior points along their interpolated normal, so subdivision
-   creates real curvature instead of just more flat triangles. */
-static float sSubDisp;
+/* How curved one triangle is, from its corner normals: 0 when they agree (a flat face quad), larger as
+   they turn away from each other (an arm, a leg, the torso). Rounding only what is curved keeps flat
+   parts (the face, the eyes and mouth) as the game draws them. */
+static float sub_curvature(const float *a, const float *b, const float *c) {
+    float ax = a[4], ay = a[5], az = a[6];
+    float bx = b[4], by = b[5], bz = b[6];
+    float cx = c[4], cy = c[5], cz = c[6];
+    float la = sqrtf(ax * ax + ay * ay + az * az);
+    float lb = sqrtf(bx * bx + by * by + bz * bz);
+    float lc = sqrtf(cx * cx + cy * cy + cz * cz);
+    float dab, dbc, dca, dmin;
+
+    if (la < 0.0001f || lb < 0.0001f || lc < 0.0001f) {
+        return 0.0f;
+    }
+    dab = (ax * bx + ay * by + az * bz) / (la * lb);
+    dbc = (bx * cx + by * cy + bz * cz) / (lb * lc);
+    dca = (cx * ax + cy * ay + cz * az) / (lc * la);
+    dmin = dab < dbc ? dab : dbc;
+    if (dca < dmin) {
+        dmin = dca;
+    }
+    if (dmin > 1.0f) {
+        dmin = 1.0f;
+    }
+    return 1.0f - dmin;
+}
+
+/* Rigid triangles whose corner normals turn at least this much also take part (arms, legs, the torso);
+   flatter ones (face, eyes, mouth) stay as the game draws them. */
+#define SUBDIV_CURV_MIN 0.25f
+/* Displacement of a rigid curved triangle from its curvature: full at about 50 degrees. */
+#define SUBDIV_CURV_GAIN 1.5f
 
 /* Extra vertices subdivision may add. A strip that no longer fits the frame's vertex buffer is dropped
    whole, which is what made characters (and their faces) vanish when the slider went up. So the mod
@@ -2503,11 +2533,19 @@ static uint32_t sub_grid_tris(int passes) {
     return n * n;
 }
 
+/* Whether `ntris` triangles can all take `passes` inside the strip's slice (room) and what is left of the
+   frame's buffers (roomV, roomI). */
+static int sub_fits(uint32_t ntris, int passes, uint32_t room, uint32_t roomV, uint32_t roomI) {
+    uint64_t v = (uint64_t)ntris * sub_grid_verts(passes);
+    uint64_t id = (uint64_t)ntris * (3u * sub_grid_tris(passes) - 3);
+    return v <= room && v <= roomV && id <= roomI;
+}
+
 /* Emit one original triangle as a shared triangular grid: every grid vertex is written once and the
    small triangles index it, so a pass costs (n+1)(n+2)/2 vertices instead of 3 per sub-triangle.
    Edge points are computed from the same two corner vertices in the neighbouring triangle, so they land
    in the same place and the mesh stays watertight. Returns 0 when the grid does not fit. */
-static int sub_emit_grid(const float *a, const float *b, const float *c, int passes) {
+static int sub_emit_grid(const float *a, const float *b, const float *c, int passes, float disp) {
     uint32_t n = 1u << passes;
     uint32_t nv = sub_grid_verts(passes), nt = sub_grid_tris(passes);
     uint32_t base = gsVuVertCount, i, j, k;
@@ -2525,18 +2563,52 @@ static int sub_emit_grid(const float *a, const float *b, const float *c, int pas
             }
             /* Only inner points move: the corners and the edge points must stay shared with the
                neighbouring triangles, and a strip's data has no room for a curved edge. */
-            if (sSubDisp > 0.0f && i > 0 && j > 0 && i + j < n) {
+            if (disp > 0.0f && i > 0 && j > 0 && i + j < n) {
                 float nx = v[4], ny = v[5], nz = v[6];
                 float len = sqrtf(nx * nx + ny * ny + nz * nz);
                 if (len > 0.0001f) {
-                    v[0] += nx / len * sSubDisp;
-                    v[1] += ny / len * sSubDisp;
-                    v[2] += nz / len * sSubDisp;
+                    v[0] += nx / len * disp;
+                    v[1] += ny / len * disp;
+                    v[2] += nz / len * disp;
                 }
             }
         }
     }
     gsVuVertCount += nv;
+    /* Smooth normals of the new, displaced surface, taken from the grid's own positions, so the extra
+       polygons show in the toon shading and not only in the silhouette. The edge points keep the
+       interpolated normal they were given above: that is what the neighbouring triangles share. */
+    if (disp > 0.0f) {
+        float rx = a[4] + b[4] + c[4];
+        float ry = a[5] + b[5] + c[5];
+        float rz = a[6] + b[6] + c[6];
+        for (j = 1; j < n; j++) {
+            uint32_t row = base + j * (n + 1) - j * (j - 1) / 2;
+            uint32_t up = base + (j + 1) * (n + 1) - (j + 1) * j / 2;
+            for (i = 1; i + j < n; i++) {
+                uint32_t ci = row + i;
+                float *p = &gsVuVerts[ci * 12];
+                float *q;
+                float t1x, t1y, t1z, t2x, t2y, t2z, nx, ny, nz, len;
+                q = &gsVuVerts[(ci + 1) * 12]; /* (i + 1, j) is always there for an inner point */
+                t1x = q[0] - p[0]; t1y = q[1] - p[1]; t1z = q[2] - p[2];
+                q = &gsVuVerts[(up + i) * 12]; /* (i, j + 1) */
+                t2x = q[0] - p[0]; t2y = q[1] - p[1]; t2z = q[2] - p[2];
+                nx = t1y * t2z - t1z * t2y;
+                ny = t1z * t2x - t1x * t2z;
+                nz = t1x * t2y - t1y * t2x;
+                if (rx * nx + ry * ny + rz * nz < 0.0f) { /* keep the side the game's normals point to */
+                    nx = -nx; ny = -ny; nz = -nz;
+                }
+                len = sqrtf(nx * nx + ny * ny + nz * nz);
+                if (len > 0.0001f) {
+                    p[4] = nx / len;
+                    p[5] = ny / len;
+                    p[6] = nz / len;
+                }
+            }
+        }
+    }
     for (j = 0; j < n; j++) {
         uint32_t row = base + j * (n + 1) - j * (j - 1) / 2;
         uint32_t up = base + (j + 1) * (n + 1) - (j + 1) * j / 2;
@@ -2613,7 +2685,7 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         disp = (float)Mods_Look()->subdiv / 100.0f * 0.05f;
     }
 
-    uint32_t nsoft = 0;
+    uint32_t nsoft = 0, nrigid = 0, nsub;
     for (i = 0; i + 2 < count; i++) {
         if (layer == 4) {
             uint32_t flag;
@@ -2624,13 +2696,19 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         }
         if (passes > 0) {
             float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
+            /* Soft (joints, cloth) always; rigid only where the surface is curved enough to show its
+               facets (arms, legs, torso), never a flat face quad. */
             if (wavg > 0.05f && wavg < 0.95f) {
                 nsoft++;
+            } else if (sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]) > SUBDIV_CURV_MIN) {
+                nrigid++;
             }
         }
     }
+    nsub = nsoft + nrigid;
 
-    int doSubdiv = passes > 0 && nsoft > 0;
+    int doSubdiv = passes > 0 && nsub > 0;
+    int rigid = 1;
     if (doSubdiv) {
         /* The mod's own slice of the frame's buffer. No strip is ever dropped for want of room: it just
            gets fewer passes (or the game's own triangles). */
@@ -2642,28 +2720,25 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
         if (room > SUBDIV_STRIP_VERTS) {
             room = SUBDIV_STRIP_VERTS;
         }
-        while (passes > 0) {
-            /* The base copy of the strip is already in usedV; each soft triangle adds its whole grid on
-               top of it (the 3 base vertices it no longer indexes still occupy their place). */
-            uint64_t v = (uint64_t)nsoft * sub_grid_verts(passes);
-            uint64_t id = (uint64_t)nsoft * (3u * sub_grid_tris(passes) - 3);
-            if (v <= room && v <= roomV && id <= roomI) {
-                break;
-            }
+        while (passes > 0 && !sub_fits(nsub, passes, room, roomV, roomI)) {
             passes--;
+        }
+        if (passes == 0 && nsoft > 0 && sub_fits(nsoft, 1, room, roomV, roomI)) {
+            /* The curved rigid parts (arms, legs, torso) need more than the frame has left. Then the joints
+               and the cloth still get their extra polygons: they are what the mod is really for. */
+            passes = 1;
+            rigid = 0;
         }
         if (passes == 0) {
             doSubdiv = 0;
         }
     }
 
-    sSubDisp = disp;
-
     if (doSubdiv) {
-        /* Copy the strip once and let the rigid triangles index it: only the triangles that blend two
-           bones (joints, soft parts) get new vertices. The old path wrote three fresh vertices for every
-           triangle, which filled the frame's vertex buffer and made whole strips disappear later in the
-           frame (a fighter's body first, then the other fighter's face). */
+        /* Copy the strip once and let the untouched triangles index it: only the triangles that blend two
+           bones (joints, soft parts) or that are curved (arms, legs, torso) get new vertices. The old path
+           wrote three fresh vertices for every triangle, which filled the frame's vertex buffer and made
+           whole strips disappear later in the frame (a fighter's body first, then the other fighter's face). */
         uint32_t base = gsVuVertCount;
         memcpy(&gsVuVerts[base * 12], vertices, count * 48);
         gsVuVertCount += count;
@@ -2676,8 +2751,18 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                 }
             }
             float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
-            if (wavg > 0.05f && wavg < 0.95f &&
-                sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], passes)) {
+            int soft = wavg > 0.05f && wavg < 0.95f;
+            float curv = sub_curvature(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12]);
+            float d = disp;
+            if (!soft) {
+                /* Rigid: round it only as much as it is curved, so a flat face quad is not inflated. */
+                d *= curv * SUBDIV_CURV_GAIN;
+                if (d > disp) {
+                    d = disp;
+                }
+            }
+            if ((soft || (rigid && curv > SUBDIV_CURV_MIN)) &&
+                sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], passes, d)) {
                 sSubdivUsed += sub_grid_verts(passes);
             } else {
                 gsVuIdx[gsVuIdxCount++] = base + i;

@@ -948,6 +948,13 @@ void BtlObj_UpdateAll(void) {
                 BtlObjPose_CalcMatrices(obj);
             }
             BtlObj_UpdateBounds(obj, state);
+#ifdef PORT
+            {   /* Script mods (bt3.look `face`): the game's own mouth-open face and serious eyes while a fighter
+                   charges ki (port/src/mods_game.c). Presentation only: nothing of the fight reads them back. */
+                extern void Port_ModsFaceGestures(s32 objId);
+                Port_ModsFaceGestures(obj->id);
+            }
+#endif
             BtlObj_UpdateFace(obj);
             BtlObjFlash_Step(obj);
             BtlObjFade_Step(obj);

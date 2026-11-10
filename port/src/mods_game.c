@@ -3,7 +3,8 @@
  * game's thread this file reads what the scripts are given of a fight beyond the gauges (fight_panels.c reads those):
  * where each fighter is. And it is where the camera hook in src/battle/btl_cam.c (BtlCam_UpdateView) comes in: the
  * pose the game gives the battle view each frame is handed to the scripts' on_camera and the pose they return is
- * the one built and drawn.
+ * the one built and drawn. It also holds the fighters' face gesture (bt3.look `face`, from BtlObj_UpdateAll): the
+ * game's own mouth-open face and serious eyes while charging ki.
  *
  * That pose is only drawn: nothing of the fight reads it back (include/battle/btl_char_cam.h: only
  * BtlCharApi_GetCamPose reads ChrCam.pos / rot; stick movement goes by ChrCam.yaw), and the game builds the view
@@ -19,6 +20,7 @@
 #include <string.h>
 
 #include "gs/mods.h"
+#include "gs/ui.h"
 #include "port_addr.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && defined(__clang__)
@@ -81,6 +83,61 @@ int Port_ModsChainGain(void) {
     if (jiggle < 0) jiggle = 0;
     if (jiggle > 100) jiggle = 100;
     return 100 + jiggle * 2;
+}
+
+/* Mouth and eyes of a fighter, for src/battle/btl_obj.c (BtlObj_UpdateAll): the script mods' bt3.look `face` shows
+   the states the game's own animation events use while the fighter charges ki (action 0x37): the mouth held open
+   (BOBJ_MOUTH_HOLD_OPEN: shape 6, the jaw turned by its 21 degrees) and eye frame 2, the expression those events ask
+   for. Each model keeps what it was built with: an eye table with fewer frames, or a mouth without that set, is left
+   as the game draws it. Only the picture: the fight reads neither state back (bobj_b.h marks both "(v)"), and when the
+   charge ends the state is handed back to the game only if it is still the one this put there. */
+#define BOBJ_EYES 0x4C /* include/battle/bobj_b.h: BObjMdl.eyes at object + 0x4C (a 4-byte game pointer, NULL: no eyes) */
+#define BTL_OBJ_COUNT 12 /* include/battle/btl_obj.h: BTL_OBJ_MAX */
+#define FACE_CHARGE_ACTION 0x37 /* the ki charge (mods.c `charging`) */
+#define FACE_CHARGE_MOUTH 10    /* BOBJ_MOUTH_HOLD_OPEN */
+#define FACE_CHARGE_EYE 2       /* the frame the game's animation event 0x800000000000000 forces */
+static unsigned char sFaceOwn[BTL_OBJ_COUNT]; /* the mouth / eyes of this object are the ones this put there */
+
+void Port_ModsFaceGestures(int objId) {
+    extern void GAME_PTR BtlObj_Get(int objId);
+    extern void GAME_PTR BtlChar_FindByObjId(int objId);
+    extern int BtlAct_GetCurrent(void GAME_PTR chr);
+    extern void BtlObj_SetSubState(void GAME_PTR obj, int mode, int arg);
+    extern void BtlObj_SetEyeFrame(void GAME_PTR obj, unsigned frame);
+    extern int BtlObj_GetMouthMode(void GAME_PTR obj);
+    extern int BtlObj_GetEyeFrame(void GAME_PTR obj);
+    const ModsLook *look = Mods_Look();
+    uint8_t GAME_PTR obj, chr, eyes;
+
+    if (gPortResim || objId < 0 || objId >= BTL_OBJ_COUNT) {
+        return;
+    }
+    obj = (uint8_t GAME_PTR)BtlObj_Get(objId);
+    if (obj == NULL) {
+        return;
+    }
+    chr = (uint8_t GAME_PTR)BtlChar_FindByObjId(objId);
+    if (chr != NULL && look != NULL && look->face > 0 && BtlAct_GetCurrent(chr) == FACE_CHARGE_ACTION) {
+        if (BtlObj_GetMouthMode(obj) != FACE_CHARGE_MOUTH) { /* (this frame's own events may have changed it) */
+            BtlObj_SetSubState(obj, FACE_CHARGE_MOUTH, 0);
+        }
+        eyes = *(uint8_t GAME_PTR GAME_PTR)(obj + BOBJ_EYES);
+        if (eyes != NULL && *(uint32_t GAME_PTR)eyes >= FACE_CHARGE_EYE) { /* (the table's first word: how many) */
+            BtlObj_SetEyeFrame(obj, FACE_CHARGE_EYE);
+        }
+        sFaceOwn[objId] = 1;
+        return;
+    }
+    if (!sFaceOwn[objId]) {
+        return;
+    }
+    if (BtlObj_GetMouthMode(obj) == FACE_CHARGE_MOUTH) {
+        BtlObj_SetSubState(obj, 0, 0);
+    }
+    if (BtlObj_GetEyeFrame(obj) == FACE_CHARGE_EYE) {
+        BtlObj_SetEyeFrame(obj, 9); /* (9: the eyes go back to blinking) */
+    }
+    sFaceOwn[objId] = 0;
 }
 
 /* Host presentation preference, never included in gameplay snapshots. */
@@ -150,6 +207,9 @@ void PortMods_GameTick(void) {
         sGame.battle = sGame.f[0].found && sGame.f[1].found;
         sGame.split = sGame.battle && Battle_IsSplitScreen();
     } else { memset(sNatural,0,sizeof(sNatural)); memset(sPausedCamera,0,sizeof(sPausedCamera)); }
+    sGame.mouseDx = PortInput_MouseDx();
+    sGame.mouseDy = PortInput_MouseDy();
+    sGame.mouseLeft = PortInput_MouseLeft();
     Mods_Tick();
 }
 

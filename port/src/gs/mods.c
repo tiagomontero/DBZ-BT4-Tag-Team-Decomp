@@ -784,10 +784,10 @@ static int l_hud_hide_game(lua_State *L) {
     return 0;
 }
 
-/* bt3.look{shading = 0..100, rim = 0..100, rim_color = 0xRRGGBBAA, vivid, ambient, energy, energy_light}: how the
-   renderer draws the fight's picture this blank (mods.h ModsLook). Asked again every blank, like the shapes: a mod
-   switched off or stopped leaves the picture as the game draws it. Fields left out are not changed; with several
-   mods each one is the strongest asked for. Only the picture changes, never the fight. */
+/* bt3.look{shading = 0..100, rim = 0..100, rim_color = 0xRRGGBBAA, vivid, ambient, energy, energy_light, subdiv,
+   jiggle, face}: how the renderer draws the fight's picture this blank (mods.h ModsLook). Asked again every blank,
+   like the shapes: a mod switched off or stopped leaves the picture as the game draws it. Fields left out are not
+   changed; with several mods each one is the strongest asked for. Only the picture changes, never the fight. */
 static int l_look(lua_State *L) {
     static const char *const keys[] = {"shading", "rim", "vivid", "ambient", "energy", "energy_light"};
     int *const out[] = {&sLookBuild.shading, &sLookBuild.rim, &sLookBuild.vivid, &sLookBuild.ambient,
@@ -826,6 +826,15 @@ static int l_look(lua_State *L) {
         int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
         if (n > sLookBuild.jiggle) {
             sLookBuild.jiggle = n;
+        }
+    }
+    lua_pop(L, 1);
+    lua_getfield(L, 1, "face");
+    if (!lua_isnil(L, -1)) {
+        lua_Number v = luaL_checknumber(L, -1);
+        int n = !(v > 0) ? 0 : v > 100 ? 100 : (int)(v + 0.5);
+        if (n > sLookBuild.face) {
+            sLookBuild.face = n;
         }
     }
     lua_pop(L, 1);
@@ -1041,6 +1050,13 @@ static void push_game(lua_State *L, const FpState *fp, const ModsGame *g) {
         lua_rawseti(L, -2, side + 1);
     }
     lua_setfield(L, -2, "fighters");
+    {   /* mouse: dx, dy accumulated since the last read, left-button state */
+        lua_createtable(L, 0, 3);
+        set_num(L, "dx", g->mouseDx);
+        set_num(L, "dy", g->mouseDy);
+        set_bool(L, "left", g->mouseLeft != 0);
+        lua_setfield(L, -2, "mouse");
+    }
 }
 
 /* ------------------------------------------------------------------------------------------------ loading */

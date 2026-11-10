@@ -18,6 +18,8 @@ typedef struct ModsFighter {
 typedef struct ModsGame {
     int battle;    /* a battle's fighters are there */
     int split;     /* split-screen layout */
+    float mouseDx, mouseDy; /* accumulated mouse motion since the last read (pixels) */
+    int mouseLeft;          /* left mouse button: 1 while held */
     ModsFighter f[2];
 } ModsGame;
 
@@ -121,6 +123,8 @@ typedef struct ModsLook {
     unsigned rim_color;
     int subdiv;   /* BT4 visual mod: 0 = off, 1..100 = CPU subdivision passes of fighter meshes (smoother silhouettes) */
     int jiggle;   /* BT4 visual mod: 0 = the game's own, 1..100 = how much stronger the game's hair/cloth chains swing */
+    int face;     /* BT4 visual mod: 0 = the game's own face, > 0 = the game's mouth-open face and serious eyes while a
+                     fighter charges ki (the states its own animation events use; nothing of the fight reads them) */
 } ModsLook;
 const ModsLook *Mods_Look(void);
 
