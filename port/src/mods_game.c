@@ -155,7 +155,15 @@ void Port_ModsFaceGestures(int objId) {
     charging = (chr != NULL && look != NULL && look->face > 0 && BtlAct_GetCurrent(chr) == FACE_CHARGE_ACTION);
     if (charging) {
         chara = BtlCharApi_GetChara(objId);
-        fprintf(stderr, "BT4 visual: objId=%d chara=%d charging ki\n", objId, chara);
+        /* Escribe el chara_id a un archivo para descubrir los IDs de cada personaje.
+           Se crea chara_ids.txt en la carpeta donde se ejecute el juego. */
+        {
+            FILE *f = fopen("chara_ids.txt", "a");
+            if (f) {
+                fprintf(f, "BT4 visual: objId=%d chara=%d charging ki\n", objId, chara);
+                fclose(f);
+            }
+        }
         if (face_expr_for_chara(chara, &mouth, &eye)) {
             /* expresión personalizada para este personaje */
         }
