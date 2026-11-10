@@ -49,6 +49,12 @@ extern s32 BtlStage_GetLightDir(Vec4 *out);
 /* Written by BtlObj_InitChains (0.1, 0, 0, 0); no reader found. */
 extern Vec4 D_003337D0;
 
+#ifdef PORT
+/* A script mod's hair/cloth strength for the chains below (port/src/mods_game.c, from bt3.look's `jiggle`):
+   100 = the game's own, higher = the same chains swing further. */
+extern int Port_ModsChainGain(void);
+#endif
+
 #define Q_IDENT(q) ((q)->x = 0.0f, (q)->y = 0.0f, (q)->z = 0.0f, (q)->w = 1.0f)
 
 /* Lets the push and the sway die away (x 0.85), except on a frame that added to them. */
@@ -114,8 +120,35 @@ void BtlObj_InitChains(BObj *obj) {
 
 /* Per-frame secondary motion: both kinds of chains, then the decay of the push. */
 void BtlObj_UpdateChains(BObj *obj) {
+#ifdef PORT
+    /* A script mod asked for stronger hair/cloth physics. What drives the chains is scaled for this step
+       only, so the motion stays the game's own (bounded by each chain's limits) and the skin is never
+       touched. The values are put back before the push decays. */
+    Vec4 move, push;
+    f32 sway, gain, f;
+
+    move = obj->move;
+    push = obj->push;
+    sway = obj->sway;
+    gain = (f32)Port_ModsChainGain();
+    if (gain > 0.0f && gain != 100.0f) {
+        f = gain / 100.0f;
+        obj->move.x *= f;
+        obj->move.y *= f;
+        obj->move.z *= f;
+        obj->push.x *= f;
+        obj->push.y *= f;
+        obj->push.z *= f;
+        obj->sway *= f;
+    }
+#endif
     BObjChainA_StepAll(obj);
     BObjChainB_StepAll(obj);
+#ifdef PORT
+    obj->move = move;
+    obj->push = push;
+    obj->sway = sway;
+#endif
     BtlObj_DecayPush(obj);
 }
 

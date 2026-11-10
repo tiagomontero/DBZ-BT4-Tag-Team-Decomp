@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-15   # Apple Silicon (arm64)
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Tools
         run: |
@@ -57,13 +57,13 @@ jobs:
           BT3_CC: mac64
         run: .venv/bin/python port/tools/package.py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: macos-build-logs
           path: port/build/*_mac64.txt
           if-no-files-found: ignore
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BT4decomp-macos-arm64
           path: |

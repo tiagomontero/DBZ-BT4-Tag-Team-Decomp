@@ -64,6 +64,25 @@ struct NaturalPose { int valid,obj; float pos[3],rot[3],anchor[3]; };
 static struct NaturalPose sNatural[10];
 int PortMods_InBattle(void) { return sGame.battle; }
 
+/* Hair, tail and cape physics for src/battle/bobj_b_b.c (BtlObj_UpdateChains): the script mods' bt3.look
+   `jiggle` as a percentage of the movement the game's own chains take (100 = the game's own, up to 300 at
+   the slider's top). The chains themselves keep their limits, so the motion cannot stretch the model. Online,
+   the chain angles are part of the synchronised state: the game's own value is kept there. */
+int Port_ModsChainGain(void) {
+    extern int Port_NetActive(void);
+    const ModsLook *look;
+    int jiggle;
+
+    if (Port_NetActive()) {
+        return 100;
+    }
+    look = Mods_Look();
+    jiggle = look != NULL ? look->jiggle : 0;
+    if (jiggle < 0) jiggle = 0;
+    if (jiggle > 100) jiggle = 100;
+    return 100 + jiggle * 2;
+}
+
 /* Host presentation preference, never included in gameplay snapshots. */
 int Port_SpecialMoveCameras(int change) {
     extern int Port_Setting(const char *,int);

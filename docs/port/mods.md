@@ -189,8 +189,8 @@ steps. Up to 24 settings, 8 choices each.
 | `ambient` | soft shadows in creases and where things meet the ground, from the depth buffer |
 | `energy` | what adds light (ki blasts, beams, sparks, flashes) drawn stronger and more saturated |
 | `energy_light` | that light tinting the ground, rocks and fighters round it |
-| `subdiv` | the fighters' meshes subdivided by the CPU this blank (the BT4 visual mod): 0 = the game's own triangles, 1..100 = up to 3 subdivision passes plus normal displacement for real curvature (smoother silhouettes, duplicated polygons in soft parts only) |
-| `jiggle` | the BT4 visual mod's damped spring on the soft parts' (hair, cloth) bone this blank: 0 = off, 1..100 = strength |
+| `subdiv` | the fighters' meshes subdivided by the CPU this blank (the BT4 visual mod): 0 = the game's own triangles, 1..100 = up to 3 subdivision passes plus normal displacement for real curvature (smoother silhouettes, extra polygons in soft parts only) |
+| `jiggle` | the BT4 visual mod's strength for the game's own secondary-motion chains (hair, tails, cloth): 0 = the game's own, 1..100 = up to three times the input movement. The chains keep their limits, and the skin is never moved |
 
 `vivid`, `ambient` and `energy_light` are one pass over the fight's picture just before its HUD, so the HUD and the
 menus keep their colours. Only the GPU renderer draws it (F1 > Video, not OpenGL); the others are drawn by every

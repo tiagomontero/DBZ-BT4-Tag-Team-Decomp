@@ -19,8 +19,11 @@ extern int gsScale;
 #define MAX_VERTS (1 << 20)
 #define MAX_DRAWS (1 << 16)
 #define MAX_TARGETS 24
-#define MAX_VU_VERTS (1 << 19)
-#define MAX_VU_IDX (1 << 20)
+#define MAX_VU_VERTS (1 << 20) /* (the visual mod's subdivision adds at most MAX/3 vertices to the game's own, which
+                                  fit in 1<<19 before: 1<<20 leaves room for both, so no strip is ever dropped for
+                                  want of space; 50 MB, allocated once) */
+#define MAX_VU_IDX (1 << 22) /* (same: the game fit in 1<<20 indices, and the subdivision adds at most 1.5M on top;
+                                 16 MB, so no strip is ever dropped) */
 #define MAX_VU_UNIFORMS 8192
 #define MAX_TEX 8192
 #define TEX_BUCKETS 32768 /* a power of two, four times MAX_TEX */

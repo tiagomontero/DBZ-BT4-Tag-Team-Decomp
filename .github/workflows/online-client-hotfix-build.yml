@@ -16,9 +16,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
         with:
           context: port/release
           tags: bt4-port-release:jammy
@@ -44,7 +44,7 @@ jobs:
               python3 port/tools/prepare_windows_runtime.py
               python3 port/tools/package.py
             '
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BT4decomp-R4-online-room-fix-Dev
           path: port/build/BT4decomp-windows-x64.zip

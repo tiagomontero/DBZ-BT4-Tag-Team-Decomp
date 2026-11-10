@@ -182,13 +182,9 @@ static int sFillWide; /* widescreen menus: in parts 13..15 too, pieces as wide a
                           versus menu's scenery; its windows, as wide, end above it) */
 static int sMenuFree; /* widescreen menus: the clip being drawn moves (markers 0x2D / 0x2E, gs_marker.c): not cut */
 
-/* BT4 visual mod: jiggle bone (resorte amortiguado sobre el hueso punta boneB). Un slot por llamada de dibujo
-   del frame; se reinicia en GsGpu_ListStart. Las llamadas de un frame se dan siempre en el mismo orden, así que
-   el índice de llamada es un identificador estable suficiente para recordar la posición del frame anterior. */
-#define JIGGLE_SLOTS 4096
-static int sJiggleIndex;
-static float sJigglePrev[JIGGLE_SLOTS][3];
-static float sJiggleVel[JIGGLE_SLOTS][3];
+/* BT4 visual mod: the extra vertices the mesh subdivision has added this frame (its slice of the frame's
+   vertex buffer; the helpers further down). Reset in GsGpu_ListStart. */
+static uint32_t sSubdivUsed;
 /* A fight's HUD in a picture wider than 4:3 (setting hud_layout, BT3_HUD=<n> for a test):
      0  the side panels at the screen's edges (as since widescreen)
      1  the same, with the health bars drawn longer, up to the timer (hud_b.c, pull request #28)
@@ -286,7 +282,7 @@ void GsGpu_ListStart(void) {
     texture_cache_trim();
     menu_hd_trim(0);
     sMenuFree = 0;
-    sJiggleIndex = 0; /* BT4 visual mod: new jiggle state for this frame */
+    sSubdivUsed = 0; /* BT4 visual mod: the subdivision's slice of this frame starts empty */
     gDrawStartNs = SDL_GetTicksNS(); /* (gs_gpu.c's clock, where it is compared) */
     gDrawTexNs = gDrawPipeNs = gDrawUpBytes = gDrawImgNs = gDrawLookNs = gDrawVuNs = gDrawXferNs = 0;
     gDrawNewTex = gDrawImgMade = gDrawImgFreed = gDrawImgPooled = 0;
@@ -2480,72 +2476,82 @@ void GsGpu_DrawVu4(int ctx, const float *vertices, uint32_t count, const float *
 
 /* ----------------------------------------------------------------- BT4 visual mod: mesh subdivision helpers */
 
-/* Displacement strength applied to edge midpoints along their averaged normal, so
-   subdivision creates real curvature instead of just more flat triangles. */
+/* Displacement strength applied to the interior points along their interpolated normal, so subdivision
+   creates real curvature instead of just more flat triangles. */
 static float sSubDisp;
 
-/* Move an edge midpoint a little along the averaged normal of its two endpoints. */
-static void sub_apply_disp(float *mid, const float *a, const float *b) {
-    float nx = (a[4] + b[4]) * 0.5f;
-    float ny = (a[5] + b[5]) * 0.5f;
-    float nz = (a[6] + b[6]) * 0.5f;
-    float len = sqrtf(nx * nx + ny * ny + nz * nz);
-    if (len > 0.0001f) {
-        nx /= len; ny /= len; nz /= len;
-        mid[0] += nx * sSubDisp;
-        mid[1] += ny * sSubDisp;
-        mid[2] += nz * sSubDisp;
-    }
+/* Extra vertices subdivision may add. A strip that no longer fits the frame's vertex buffer is dropped
+   whole, which is what made characters (and their faces) vanish when the slider went up. So the mod
+   keeps a slice of the buffer: one strip may use this much, and the whole frame this much. A strip past
+   its slice is drawn with fewer passes (or none), never dropped. */
+#define SUBDIV_STRIP_VERTS (MAX_VU_VERTS / 8)
+#define SUBDIV_FRAME_VERTS (MAX_VU_VERTS / 3)
+/* The last part of each buffer is left to the game: whatever else the frame draws still fits, so no strip
+   is dropped because the mod got there first. */
+#define SUBDIV_RESERVE_VERTS (MAX_VU_VERTS / 8)
+#define SUBDIV_RESERVE_IDX (MAX_VU_IDX / 8)
+
+/* Vertices of the triangular grid one triangle becomes after `passes` passes: (n+1)(n+2)/2, n = 2^passes. */
+static uint32_t sub_grid_verts(int passes) {
+    uint32_t n = 1u << passes;
+    return (n + 1) * (n + 2) / 2;
 }
 
-/* Emit one sub-triangle (a, b, c) as an independent triangle: 3 vertices, 3 indices, no sharing. */
-static void sub_emit_tri(const float *a, const float *b, const float *c) {
-    if (gsVuVertCount + 3 > MAX_VU_VERTS || gsVuIdxCount + 3 > MAX_VU_IDX) {
-        return; /* budget exhausted: drop this triangle */
-    }
-    uint32_t v0 = gsVuVertCount;
-    memcpy(&gsVuVerts[v0 * 12], a, 48);
-    uint32_t v1 = gsVuVertCount + 1;
-    memcpy(&gsVuVerts[v1 * 12], b, 48);
-    uint32_t v2 = gsVuVertCount + 2;
-    memcpy(&gsVuVerts[v2 * 12], c, 48);
-    gsVuIdx[gsVuIdxCount++] = v0;
-    gsVuIdx[gsVuIdxCount++] = v1;
-    gsVuIdx[gsVuIdxCount++] = v2;
-    gsVuVertCount += 3;
+/* Sub-triangles of that grid: 4^passes. */
+static uint32_t sub_grid_tris(int passes) {
+    uint32_t n = 1u << passes;
+    return n * n;
 }
 
-/* Recursively emit one original triangle subdivided into 4^level sub-triangles. Each sub-triangle is
-   independent (no vertex sharing between siblings), which keeps the indices trivially correct. */
-static void sub_emit(const float *a, const float *b, const float *c, int level) {
-    if (level == 0) {
-        sub_emit_tri(a, b, c);
-        return;
-    }
-    float ab[12], bc[12], ca[12];
-    for (int k = 0; k < 12; k++) {
-        ab[k] = (a[k] + b[k]) * 0.5f;
-        bc[k] = (b[k] + c[k]) * 0.5f;
-        ca[k] = (c[k] + a[k]) * 0.5f;
-    }
-    if (sSubDisp > 0.0f) {
-        sub_apply_disp(ab, a, b);
-        sub_apply_disp(bc, b, c);
-        sub_apply_disp(ca, c, a);
-    }
-    sub_emit(a, ab, ca, level - 1);
-    sub_emit(ab, b, bc, level - 1);
-    sub_emit(ca, bc, c, level - 1);
-    sub_emit(ab, bc, ca, level - 1);
-}
+/* Emit one original triangle as a shared triangular grid: every grid vertex is written once and the
+   small triangles index it, so a pass costs (n+1)(n+2)/2 vertices instead of 3 per sub-triangle.
+   Edge points are computed from the same two corner vertices in the neighbouring triangle, so they land
+   in the same place and the mesh stays watertight. Returns 0 when the grid does not fit. */
+static int sub_emit_grid(const float *a, const float *b, const float *c, int passes) {
+    uint32_t n = 1u << passes;
+    uint32_t nv = sub_grid_verts(passes), nt = sub_grid_tris(passes);
+    uint32_t base = gsVuVertCount, i, j, k;
 
-/* Worst-case vertices and indices one original triangle needs for `passes` passes: 4^passes sub-triangles,
-   each an independent triangle (3 verts / 3 indices). */
-static void sub_budget(int passes, uint32_t *verts, uint32_t *idx) {
-    uint32_t t = 1;
-    for (int p = 0; p < passes; p++) t *= 4; /* 4^passes */
-    *verts = 3 * t;
-    *idx = 3 * t;
+    if (base + nv > MAX_VU_VERTS || gsVuIdxCount + 3u * nt > MAX_VU_IDX) {
+        return 0;
+    }
+    for (j = 0; j <= n; j++) {
+        uint32_t row = base + j * (n + 1) - j * (j - 1) / 2;
+        for (i = 0; i + j <= n; i++) {
+            float w1 = (float)i / (float)n, w2 = (float)j / (float)n, w3 = 1.0f - w1 - w2;
+            float *v = &gsVuVerts[(row + i) * 12];
+            for (k = 0; k < 12; k++) {
+                v[k] = a[k] * w1 + b[k] * w2 + c[k] * w3;
+            }
+            /* Only inner points move: the corners and the edge points must stay shared with the
+               neighbouring triangles, and a strip's data has no room for a curved edge. */
+            if (sSubDisp > 0.0f && i > 0 && j > 0 && i + j < n) {
+                float nx = v[4], ny = v[5], nz = v[6];
+                float len = sqrtf(nx * nx + ny * ny + nz * nz);
+                if (len > 0.0001f) {
+                    v[0] += nx / len * sSubDisp;
+                    v[1] += ny / len * sSubDisp;
+                    v[2] += nz / len * sSubDisp;
+                }
+            }
+        }
+    }
+    gsVuVertCount += nv;
+    for (j = 0; j < n; j++) {
+        uint32_t row = base + j * (n + 1) - j * (j - 1) / 2;
+        uint32_t up = base + (j + 1) * (n + 1) - (j + 1) * j / 2;
+        for (i = 0; i + j < n; i++) {
+            gsVuIdx[gsVuIdxCount++] = row + i;
+            gsVuIdx[gsVuIdxCount++] = row + i + 1;
+            gsVuIdx[gsVuIdxCount++] = up + i;
+            if (i + j + 1 < n) {
+                gsVuIdx[gsVuIdxCount++] = row + i + 1;
+                gsVuIdx[gsVuIdxCount++] = up + i + 1;
+                gsVuIdx[gsVuIdxCount++] = up + i;
+            }
+        }
+    }
+    return 1;
 }
 
 /* Vertex program 0 as a shader: one strip of the fighters' models (see shaders/vu0.vert and gs_vu1.c). The strip
@@ -2589,55 +2595,10 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     if (depth_frac()) { u.misc[2] = -u.misc[2]; }
     u.misc[3] = (float)layer;
     u.light2[0] = consts[41]; u.light2[1] = consts[45]; u.light2[2] = consts[49]; u.light2[3] = consts[53];
-    /* BT4 visual mod: jiggle bone (resorte amortiguado sobre el hueso punta boneB). Se aplica SOLO a los trozos
-       de malla que mezclan dos huesos con un peso intermedio (0.05 < w < 0.95): esos son el pelo, las capas y
-       la ropa suelta. Los trozos rígidos (cuerpo, brazos, piernas, weight 0 o 1) se saltan, para que el personaje
-       no se deforme entero. */
-    if (Mods_Look()->jiggle > 0 && (layer == 0 || layer == 1) && sJiggleIndex < JIGGLE_SLOTS) {
-        /* heurística: peso promedio de los vértices del trozo */
-        float wsum = 0.0f;
-        uint32_t wcount = 0;
-        int isSoft = 0;
-        for (i = 0; i < count; i++) {
-            float w = vertices[i * 12 + 3];
-            wsum += w;
-            wcount++;
-        }
-        if (wcount > 0) {
-            float wavg = wsum / (float)wcount;
-            /* blending real: ni rígido (0 o 1) ni degenerado */
-            if (wavg > 0.05f && wavg < 0.95f) {
-                isSoft = 1;
-            }
-        }
-        /* también: si boneA y boneB son idénticos, es rígido */
-        if (isSoft) {
-            int identical = 1;
-            for (i = 0; i < 16; i++) {
-                if (u.boneA[i] != u.boneB[i]) { identical = 0; break; }
-            }
-            if (identical) isSoft = 0;
-        }
-        if (isSoft) {
-            int slot = sJiggleIndex++;
-            float *prev = sJigglePrev[slot];
-            float *vel = sJiggleVel[slot];
-            float cur[3] = {u.boneB[12], u.boneB[13], u.boneB[14]};
-            float stiffness = Mods_Look()->jiggle / 100.0f * 0.6f;
-            float damping = 0.82f;
-            /* BT4 visual mod: dead zone - cuando el resorte vuelve al hueso (calmado), se fija en el
-               valor de reposo y se corta la velocidad, para que no haya overshoot ni estiramiento residual. */
-            float deadzone = 0.0005f;
-            for (int c = 0; c < 3; c++) {
-                float delta = cur[c] - prev[c];
-                vel[c] += delta * stiffness - vel[c] * (1.0f - damping);
-                cur[c] = prev[c] + vel[c];
-                if (fabsf(cur[c] - prev[c]) < deadzone) { cur[c] = prev[c]; vel[c] = 0.0f; }
-            }
-            u.boneB[12] = cur[0]; u.boneB[13] = cur[1]; u.boneB[14] = cur[2];
-            prev[0] = cur[0]; prev[1] = cur[1]; prev[2] = cur[2];
-        }
-    }
+    /* BT4 visual mod: the jiggle is no longer a spring on this bone. Moving a bone here deformed the whole
+       strip (the joints' blended skin stretched), because the strips that blend two bones are joints, not
+       hair. The game's own secondary-motion chains (src/battle/bobj_b_b.c: hair, tails, capes) do that job
+       now, with the mod's strength applied in BtlObj_UpdateChains. */
     d.vu = 1;
     d.first = gsVuIdxCount;
 
@@ -2648,10 +2609,11 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
     float disp = 0.0f;
     if (Mods_Look()->subdiv > 0 && (layer == 0 || layer == 1)) {
         passes = Mods_Look()->subdiv > 66 ? 3 : Mods_Look()->subdiv > 33 ? 2 : 1;
-        disp = (float)(Mods_Look()->subdiv % 34) / 100.0f * 0.18f;
+        /* Monotonic: a sawtooth here made the model pop when the slider crossed 34 or 67. */
+        disp = (float)Mods_Look()->subdiv / 100.0f * 0.05f;
     }
 
-    uint32_t ntri = 0;
+    uint32_t nsoft = 0;
     for (i = 0; i + 2 < count; i++) {
         if (layer == 4) {
             uint32_t flag;
@@ -2660,29 +2622,51 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                 continue;
             }
         }
-        ntri++;
+        if (passes > 0) {
+            float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
+            if (wavg > 0.05f && wavg < 0.95f) {
+                nsoft++;
+            }
+        }
     }
 
-    int doSubdiv = passes > 0;
+    int doSubdiv = passes > 0 && nsoft > 0;
     if (doSubdiv) {
-        uint32_t needV, needI;
-        sub_budget(passes, &needV, &needI);
-        while (passes > 0 &&
-               (gsVuVertCount + ntri * needV > MAX_VU_VERTS ||
-                gsVuIdxCount + ntri * needI > MAX_VU_IDX)) {
-            passes--;
-            sub_budget(passes, &needV, &needI);
-            if (passes == 0) {
-                doSubdiv = 0;
+        /* The mod's own slice of the frame's buffer. No strip is ever dropped for want of room: it just
+           gets fewer passes (or the game's own triangles). */
+        uint32_t room = sSubdivUsed < SUBDIV_FRAME_VERTS ? SUBDIV_FRAME_VERTS - sSubdivUsed : 0;
+        uint32_t usedV = gsVuVertCount + count;
+        uint32_t usedI = gsVuIdxCount + (count - 2) * 3;
+        uint32_t roomV = usedV + SUBDIV_RESERVE_VERTS < MAX_VU_VERTS ? MAX_VU_VERTS - usedV - SUBDIV_RESERVE_VERTS : 0;
+        uint32_t roomI = usedI + SUBDIV_RESERVE_IDX < MAX_VU_IDX ? MAX_VU_IDX - usedI - SUBDIV_RESERVE_IDX : 0;
+        if (room > SUBDIV_STRIP_VERTS) {
+            room = SUBDIV_STRIP_VERTS;
+        }
+        while (passes > 0) {
+            /* The base copy of the strip is already in usedV; each soft triangle adds its whole grid on
+               top of it (the 3 base vertices it no longer indexes still occupy their place). */
+            uint64_t v = (uint64_t)nsoft * sub_grid_verts(passes);
+            uint64_t id = (uint64_t)nsoft * (3u * sub_grid_tris(passes) - 3);
+            if (v <= room && v <= roomV && id <= roomI) {
+                break;
             }
+            passes--;
+        }
+        if (passes == 0) {
+            doSubdiv = 0;
         }
     }
 
     sSubDisp = disp;
 
-    if (doSubdiv && passes > 0) {
-        /* Subdivision path: one loop, recursive emission with curvature. Subdivide only the triangles that
-           blend two bones (soft parts: hair, cloth); the rigid ones (weight 0/1) keep their own triangle. */
+    if (doSubdiv) {
+        /* Copy the strip once and let the rigid triangles index it: only the triangles that blend two
+           bones (joints, soft parts) get new vertices. The old path wrote three fresh vertices for every
+           triangle, which filled the frame's vertex buffer and made whole strips disappear later in the
+           frame (a fighter's body first, then the other fighter's face). */
+        uint32_t base = gsVuVertCount;
+        memcpy(&gsVuVerts[base * 12], vertices, count * 48);
+        gsVuVertCount += count;
         for (i = 0; i + 2 < count; i++) {
             if (layer == 4) {
                 uint32_t flag;
@@ -2691,16 +2675,14 @@ void GsGpu_DrawVu0(int layer, int ctx, const float *vertices, uint32_t count, co
                     continue;
                 }
             }
-            float wsum = 0.0f;
-            int wcnt = 0;
-            for (int j = 0; j < 3; j++) { wsum += vertices[(i + j) * 12 + 3]; wcnt++; }
-            float wavg = wsum / wcnt;
-            if (wavg > 0.05f && wavg < 0.95f) {
-                sub_emit(&vertices[i * 12], &vertices[(i + 1) * 12],
-                         &vertices[(i + 2) * 12], passes);
+            float wavg = (vertices[i * 12 + 3] + vertices[(i + 1) * 12 + 3] + vertices[(i + 2) * 12 + 3]) / 3.0f;
+            if (wavg > 0.05f && wavg < 0.95f &&
+                sub_emit_grid(&vertices[i * 12], &vertices[(i + 1) * 12], &vertices[(i + 2) * 12], passes)) {
+                sSubdivUsed += sub_grid_verts(passes);
             } else {
-                sub_emit(&vertices[i * 12], &vertices[(i + 1) * 12],
-                         &vertices[(i + 2) * 12], 0);
+                gsVuIdx[gsVuIdxCount++] = base + i;
+                gsVuIdx[gsVuIdxCount++] = base + i + 1;
+                gsVuIdx[gsVuIdxCount++] = base + i + 2;
             }
         }
     } else {

@@ -120,7 +120,7 @@ typedef struct ModsLook {
     int shading, rim, vivid, ambient, energy, energy_light;
     unsigned rim_color;
     int subdiv;   /* BT4 visual mod: 0 = off, 1..100 = CPU subdivision passes of fighter meshes (smoother silhouettes) */
-    int jiggle;   /* BT4 visual mod: 0 = off, 1..100 = strength of damped-spring secondary motion on soft parts */
+    int jiggle;   /* BT4 visual mod: 0 = the game's own, 1..100 = how much stronger the game's hair/cloth chains swing */
 } ModsLook;
 const ModsLook *Mods_Look(void);
 
