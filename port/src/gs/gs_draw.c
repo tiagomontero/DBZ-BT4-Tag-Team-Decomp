@@ -6110,12 +6110,12 @@ static void particle_project(float x, float y, float z, float *sx, float *sy) {
 }
 
 void ModsParticles_Draw(void) {
-    int i, j;
+    int i;
     int numVerts = 0;
     int firstVert;
     GsVertex dummy;
 
-    /* Contar vértices necesarios (4 por burbuja activa) */
+    /* Contar vértices necesarios (4 por partícula activa) */
     for (i = 0; i < MODS_PARTICLES_MAX; i++) {
         if (sModsParticles[i].active) {
             numVerts += 4;
@@ -6133,7 +6133,7 @@ void ModsParticles_Draw(void) {
 
     firstVert = gsVertCount;
 
-    /* Agregar 4 vértices por burbuja (cuadrado pequeño) */
+    /* Agregar 4 vértices por partícula (cuadrado pequeño) */
     for (i = 0; i < MODS_PARTICLES_MAX; i++) {
         ModsParticle *p = &sModsParticles[i];
         if (!p->active) {
@@ -6142,18 +6142,30 @@ void ModsParticles_Draw(void) {
 
         float sx, sy;
         float size = p->size * 0.5f;
-        uint8_t alpha = (uint8_t)(p->life * 180); /* alpha basado en vida */
+        /* Alpha basado en vida: destellos y chispas más intensos al inicio */
+        uint8_t alpha = (uint8_t)(p->life * 200);
+        if (p->type == MODS_PARTICLE_FLASH) {
+            alpha = (uint8_t)(p->life * 255); /* destello más brillante */
+        }
+        if (p->type == MODS_PARTICLE_SPARK) {
+            alpha = (uint8_t)(p->life * 220);
+        }
 
         particle_project(p->x, p->y, p->z, &sx, &sy);
 
+        /* Color según el tipo de partícula */
+        uint8_t r = (uint8_t)(p->r * 255);
+        uint8_t g = (uint8_t)(p->g * 255);
+        uint8_t b = (uint8_t)(p->b * 255);
+
         /* 4 esquinas del cuadrado */
-        put(&dummy, sx - size, sy - size, 0.0f, 0.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
-        put(&dummy, sx + size, sy - size, 1.0f, 0.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
-        put(&dummy, sx + size, sy + size, 1.0f, 1.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
-        put(&dummy, sx - size, sy + size, 0.0f, 1.0f, 1.0f, 100, 200, 255, alpha, 1.0f);
+        put(&dummy, sx - size, sy - size, 0.0f, 0.0f, 1.0f, r, g, b, alpha, 1.0f);
+        put(&dummy, sx + size, sy - size, 1.0f, 0.0f, 1.0f, r, g, b, alpha, 1.0f);
+        put(&dummy, sx + size, sy + size, 1.0f, 1.0f, 1.0f, r, g, b, alpha, 1.0f);
+        put(&dummy, sx - size, sy + size, 0.0f, 1.0f, 1.0f, r, g, b, alpha, 1.0f);
     }
 
-    /* Crear un GsDraw para dibujar todas las burbujas como un triángulo-strip */
+    /* Crear un GsDraw para dibujar todas las partículas como un triángulo-strip */
     {
         GsDraw d;
         memset(&d, 0, sizeof(d));

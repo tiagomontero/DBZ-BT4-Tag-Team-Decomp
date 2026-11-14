@@ -262,6 +262,8 @@ void PortMods_GameTick(void) {
     int side;
     uint8_t GAME_PTR chr;
     static int particleTimer[2] = {0, 0};
+    const ModsLook *look = Mods_Look();
+    int particleIntensity = look ? look->particles : 0;
 
     if (gPortResim) {
         return;
@@ -275,16 +277,33 @@ void PortMods_GameTick(void) {
                 rdf(sGame.f[side].pos, chr, CHR_POSE, 3);
                 rdf(&sGame.f[side].yaw, chr, CHR_POSE + POSE_YAW, 1);
                 sGame.f[side].action = BtlAct_GetCurrent(chr);
-                /* Generar burbujas de soda al cargar ki (acción 0x37) */
-                if (sGame.f[side].action == 0x37) {
+                /* Generar partículas al cargar ki (acción 0x37) */
+                if (sGame.f[side].action == 0x37 && particleIntensity > 0) {
                     particleTimer[side]++;
-                    if (particleTimer[side] >= 4) { /* una burbuja cada 4 frames */
+                    /* Una partícula cada 2 frames, más partículas si el slider es mayor */
+                    int framesPerParticle = 3 - (particleIntensity / 34); /* 1..3 frames */
+                    if (framesPerParticle < 1) framesPerParticle = 1;
+                    if (particleTimer[side] >= framesPerParticle) {
                         particleTimer[side] = 0;
-                        /* Burbuja cerca del personaje, con ligero desplazamiento aleatorio */
-                        float bx = sGame.f[side].pos[0] + ((float)(particleTimer[side] * 7 % 100) - 50.0f) * 0.1f;
-                        float by = sGame.f[side].pos[1] + 30.0f; /* por encima del personaje */
-                        float bz = sGame.f[side].pos[2] + ((float)(particleTimer[side] * 13 % 100) - 50.0f) * 0.1f;
-                        ModsParticles_Add(bx, by, bz, 6.0f + (float)(particleTimer[side] % 5) * 2.0f);
+                        /* Posición aleatoria cerca del personaje (altura de cabeza/hombros) */
+                        float bx = sGame.f[side].pos[0] + ((float)(Port_Rand() % 100) - 50.0f) * 0.15f;
+                        float by = sGame.f[side].pos[1] + 40.0f + ((float)(Port_Rand() % 30) * 0.5f);
+                        float bz = sGame.f[side].pos[2] + ((float)(Port_Rand() % 100) - 50.0f) * 0.15f;
+                        /* Elegir tipo de partícula al azar: burbuja, chispa, polvo, destello */
+                        int ptype = Port_Rand() % 4;
+                        if (ptype == MODS_PARTICLE_BUBBLE) {
+                            ModsParticles_Add(MODS_PARTICLE_BUBBLE, bx, by, bz,
+                                5.0f + (float)(Port_Rand() % 6) * 1.0f, 0.6f, 0.8f, 1.0f);
+                        } else if (ptype == MODS_PARTICLE_SPARK) {
+                            ModsParticles_Add(MODS_PARTICLE_SPARK, bx, by, bz,
+                                3.0f + (float)(Port_Rand() % 4) * 1.0f, 1.0f, 0.9f, 0.4f);
+                        } else if (ptype == MODS_PARTICLE_DUST) {
+                            ModsParticles_Add(MODS_PARTICLE_DUST, bx, by, bz,
+                                4.0f + (float)(Port_Rand() % 4) * 1.0f, 0.8f, 0.8f, 0.8f);
+                        } else {
+                            ModsParticles_Add(MODS_PARTICLE_FLASH, bx, by, bz,
+                                8.0f + (float)(Port_Rand() % 6) * 2.0f, 1.0f, 1.0f, 0.8f);
+                        }
                     }
                 } else {
                     particleTimer[side] = 0;
@@ -382,19 +401,48 @@ void Port_ModsCamera(int side, int objId, int pos, int rot, int paused) {
 
 ModsParticle sModsParticles[MODS_PARTICLES_MAX];
 
-void ModsParticles_Add(float x, float y, float z, float size) {
+void ModsParticles_Add(int type, float x, float y, float z, float size, float r, float g, float b) {
     int i;
     for (i = 0; i < MODS_PARTICLES_MAX; i++) {
         if (!sModsParticles[i].active) {
             sModsParticles[i].active = 1;
+            sModsParticles[i].type = type;
             sModsParticles[i].x = x;
             sModsParticles[i].y = y;
             sModsParticles[i].z = z;
-            sModsParticles[i].vx = ((float)(Port_Rand() % 200) - 100.0f) * 0.05f;
-            sModsParticles[i].vy = 2.0f + (float)(Port_Rand() % 50) * 0.1f; /* subir */
-            sModsParticles[i].vz = ((float)(Port_Rand() % 200) - 100.0f) * 0.05f;
+            sModsParticles[i].r = r;
+            sModsParticles[i].g = g;
+            sModsParticles[i].b = b;
             sModsParticles[i].size = size;
             sModsParticles[i].life = 1.0f;
+            /* Velocidad inicial según el tipo de partícula */
+            switch (type) {
+                case MODS_PARTICLE_BUBBLE:
+                    /* Burbuja: sube lento, drift lateral suave */
+                    sModsParticles[i].vx = ((float)(Port_Rand() % 100) - 50.0f) * 0.03f;
+                    sModsParticles[i].vy = 1.5f + (float)(Port_Rand() % 30) * 0.05f;
+                    sModsParticles[i].vz = ((float)(Port_Rand() % 100) - 50.0f) * 0.03f;
+                    sModsParticles[i].vy += 0.05f; /* ligera aceleración hacia arriba */
+                    break;
+                case MODS_PARTICLE_SPARK:
+                    /* Chispa: sale rápido en todas direcciones, cae por gravedad */
+                    sModsParticles[i].vx = ((float)(Port_Rand() % 200) - 100.0f) * 0.15f;
+                    sModsParticles[i].vy = ((float)(Port_Rand() % 100) - 50.0f) * 0.15f;
+                    sModsParticles[i].vz = ((float)(Port_Rand() % 200) - 100.0f) * 0.15f;
+                    break;
+                case MODS_PARTICLE_DUST:
+                    /* Polvo: cae lento, drift lento */
+                    sModsParticles[i].vx = ((float)(Port_Rand() % 100) - 50.0f) * 0.02f;
+                    sModsParticles[i].vy = -1.0f + (float)(Port_Rand() % 20) * 0.05f; /* cae */
+                    sModsParticles[i].vz = ((float)(Port_Rand() % 100) - 50.0f) * 0.02f;
+                    break;
+                case MODS_PARTICLE_FLASH:
+                    /* Destello: casi no se mueve, se apaga rápido */
+                    sModsParticles[i].vx = ((float)(Port_Rand() % 40) - 20.0f) * 0.02f;
+                    sModsParticles[i].vy = ((float)(Port_Rand() % 40) - 20.0f) * 0.02f;
+                    sModsParticles[i].vz = ((float)(Port_Rand() % 40) - 20.0f) * 0.02f;
+                    break;
+            }
             return;
         }
     }
@@ -410,7 +458,21 @@ void ModsParticles_Update(void) {
         p->x += p->vx;
         p->y += p->vy;
         p->z += p->vz;
-        p->vy += 0.1f; /* ligera aceleración hacia arriba */
+        /* Gravedad y aceleración según el tipo */
+        switch (p->type) {
+            case MODS_PARTICLE_BUBBLE:
+                p->vy += 0.05f; /* burbujas suben */
+                break;
+            case MODS_PARTICLE_SPARK:
+                p->vy += 0.15f; /* chispas caen rápido por gravedad */
+                break;
+            case MODS_PARTICLE_DUST:
+                p->vy += 0.08f; /* polvo cae lento */
+                break;
+            case MODS_PARTICLE_FLASH:
+                /* destellos casi no se mueven, solo se desvanecen */
+                break;
+        }
         p->life -= 0.02f; /* ~50 frames de vida */
         if (p->life <= 0.0f) {
             p->active = 0;

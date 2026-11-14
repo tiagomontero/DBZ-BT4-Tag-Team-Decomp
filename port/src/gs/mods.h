@@ -134,6 +134,7 @@ typedef struct ModsLook {
     int jiggle;   /* BT4 visual mod: 0 = the game's own, 1..100 = how much stronger the game's hair/cloth chains swing */
     int face;     /* BT4 visual mod: 0 = the game's own face, > 0 = the game's mouth-open face and serious eyes while a
                      fighter charges ki (the states its own animation events use; nothing of the fight reads them) */
+    int particles; /* BT4 visual mod: 0 = off, 1..100 = intensity of ki-charge particle effects (bubbles, sparks) */
 } ModsLook;
 const ModsLook *Mods_Look(void);
 
