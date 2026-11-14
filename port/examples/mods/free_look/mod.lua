@@ -1,9 +1,9 @@
--- Free look v2.0: cámara siempre DETRÁS del personaje, sigue cuando se mueve.
---   - Mover el mouse: orbita alrededor del personaje (yaw/pitch)
+-- Free look v2.1: cámara siempre DETRÁS del personaje, sigue cuando se mueve.
+--   - Mover el mouse: orbita la vista alrededor del personaje (yaw/pitch)
 --   - Clic izquierdo: recentra directamente detrás del personaje
---   - Rueda del mouse: acerca / aleja (zoom)
---   - WASD / stick: el personaje se mueve, la cámara lo sigue
---   - Sin mouse por N segundos: vuelve suavemente a cámara normal
+--   - Rueda del mouse: acerca / aleja la cámara (zoom)
+--   - WASD / stick: el personaje se mueve y la cámara lo sigue
+--   - Sin mouse por N segundos: vuelve suavemente a la cámara del juego
 -- Los ataques siguen yendo al rival; el mouse solo cambia la vista.
 
 local pi = math.pi
@@ -17,17 +17,17 @@ end
 local sides = { {}, {} }
 
 local function reset(c, dist_default)
-    c.yaw = 0
-    c.pitch = 0
+    c.yaw = 0            -- offset de orbita del mouse (0 = directamente detrás)
+    c.pitch = 0          -- offset de inclinación del mouse
     c.dist = dist_default
     c.lastMove = nil
 end
 
 return {
     name = "Free look",
-    version = "2.0",
+    version = "2.1",
     author = "BT4decomp",
-    description = "Cámara siempre detrás del personaje. Orbita con el mouse, sigue al personaje.",
+    description = "Cámara siempre detrás del personaje. Orbita con el mouse, sigue al personaje cuando se mueve.",
     settings = {
         { id = "enable", label = "Activar free look", type = "toggle", default = 1 },
         { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 10, max = 500, step = 5, default = 150 },
@@ -99,7 +99,7 @@ return {
             c.lastMove = now
         end
 
-        -- Auto-recentrado suave
+        -- Auto-recentrado suave tras `auto` segundos sin movimiento
         if auto > 0 and c.lastMove and now - c.lastMove > auto then
             local k = 0.15
             c.yaw = c.yaw * (1 - k)
@@ -107,7 +107,8 @@ return {
             c.dist = c.dist + (dist_default - c.dist) * k
         end
 
-        -- Cámara DETRÁS del personaje: p.yaw + pi = 180° (detrás)
+        -- La cámara está siempre DETRÁS del personaje:
+        -- p.yaw + pi = 180 grados detrás del personaje (donde mira)
         -- c.yaw = offset extra del mouse para orbita
         local total_yaw = wrap(pyaw + pi + c.yaw)
         local total_pitch = c.pitch

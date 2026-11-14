@@ -280,29 +280,28 @@ void PortMods_GameTick(void) {
                 /* Generar partículas al cargar ki (acción 0x37) */
                 if (sGame.f[side].action == 0x37 && particleIntensity > 0) {
                     particleTimer[side]++;
-                    /* Una partícula cada 2 frames, más partículas si el slider es mayor */
-                    int framesPerParticle = 3 - (particleIntensity / 34); /* 1..3 frames */
-                    if (framesPerParticle < 1) framesPerParticle = 1;
-                    if (particleTimer[side] >= framesPerParticle) {
-                        particleTimer[side] = 0;
+                    /* Más partículas si el slider es mayor (1-4 partículas por ciclo) */
+                    int particlesToEmit = 1 + particleIntensity / 25; /* 1..5 */
+                    int i;
+                    for (i = 0; i < particlesToEmit; i++) {
                         /* Posición aleatoria cerca del personaje (altura de cabeza/hombros) */
-                        float bx = sGame.f[side].pos[0] + ((float)(Port_Rand() % 100) - 50.0f) * 0.15f;
-                        float by = sGame.f[side].pos[1] + 40.0f + ((float)(Port_Rand() % 30) * 0.5f);
-                        float bz = sGame.f[side].pos[2] + ((float)(Port_Rand() % 100) - 50.0f) * 0.15f;
-                        /* Elegir tipo de partícula al azar: burbuja, chispa, polvo, destello */
-                        int ptype = Port_Rand() % 4;
-                        if (ptype == MODS_PARTICLE_BUBBLE) {
+                        float bx = sGame.f[side].pos[0] + ((float)(Port_Rand() % 100) - 50.0f) * 0.2f;
+                        float by = sGame.f[side].pos[1] + 30.0f + ((float)(Port_Rand() % 40) * 0.5f);
+                        float bz = sGame.f[side].pos[2] + ((float)(Port_Rand() % 100) - 50.0f) * 0.2f;
+                        /* Elegir tipo de partícula al azar con probabilidades diferentes */
+                        int ptype = Port_Rand() % 100;
+                        if (ptype < 40) { /* 40% burbujas */
                             ModsParticles_Add(MODS_PARTICLE_BUBBLE, bx, by, bz,
-                                5.0f + (float)(Port_Rand() % 6) * 1.0f, 0.6f, 0.8f, 1.0f);
-                        } else if (ptype == MODS_PARTICLE_SPARK) {
+                                4.0f + (float)(Port_Rand() % 8) * 1.0f, 0.5f, 0.8f, 1.0f);
+                        } else if (ptype < 70) { /* 30% chispas */
                             ModsParticles_Add(MODS_PARTICLE_SPARK, bx, by, bz,
-                                3.0f + (float)(Port_Rand() % 4) * 1.0f, 1.0f, 0.9f, 0.4f);
-                        } else if (ptype == MODS_PARTICLE_DUST) {
+                                2.0f + (float)(Port_Rand() % 5) * 1.0f, 1.0f, 0.9f, 0.3f);
+                        } else if (ptype < 85) { /* 15% polvo */
                             ModsParticles_Add(MODS_PARTICLE_DUST, bx, by, bz,
-                                4.0f + (float)(Port_Rand() % 4) * 1.0f, 0.8f, 0.8f, 0.8f);
-                        } else {
+                                3.0f + (float)(Port_Rand() % 5) * 1.0f, 0.7f, 0.7f, 0.7f);
+                        } else { /* 15% destellos */
                             ModsParticles_Add(MODS_PARTICLE_FLASH, bx, by, bz,
-                                8.0f + (float)(Port_Rand() % 6) * 2.0f, 1.0f, 1.0f, 0.8f);
+                                6.0f + (float)(Port_Rand() % 6) * 2.0f, 1.0f, 1.0f, 0.7f);
                         }
                     }
                 } else {

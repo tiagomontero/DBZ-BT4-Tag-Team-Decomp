@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Graphics Synthesizer, the capture side of the GPU back ends (gs_gpu.c: Vulkan, gs_gl.c: OpenGL).
  *
  * gs_core.c still decodes what the game sends and keeps GS memory; this file takes over at "a primitive with
@@ -6100,13 +6100,18 @@ void GsGpu_FrameEnd(void) {
 /* ----------------------------------------------------------------- Partículas de mods (burbujas de soda) */
 /* Proyección 3D a 2D muy simple: asume que el personaje está cerca del centro de la pantalla.
    No es una proyección real de cámara, pero sirve para ver las burbujas flotando. */
+static void /* ----------------------------------------------------------------- Partículas de mods (burbujas de soda, chispas, polvo, destellos) */
+/* Proyección 3D a 2D simple: convierte coordenadas del mundo a coordenadas de pantalla normalizadas (0..1).
+   Usa una aproximación de cámara desde el frente para que las partículas se vean en el lugar correcto. */
 static void particle_project(float x, float y, float z, float *sx, float *sy) {
-    *sx = 0.5f + x * 0.003f;
-    *sy = 0.5f - z * 0.003f;
-    if (*sx < 0.0f) *sx = 0.0f;
-    if (*sx > 1.0f) *sx = 1.0f;
-    if (*sy < 0.0f) *sy = 0.0f;
-    if (*sy > 1.0f) *sy = 1.0f;
+    float sx_raw = 0.5f + x * 0.0025f;
+    float sy_raw = 0.5f - z * 0.0025f - y * 0.0015f;
+    if (sx_raw < 0.0f) sx_raw = 0.0f;
+    if (sx_raw > 1.0f) sx_raw = 1.0f;
+    if (sy_raw < 0.0f) sy_raw = 0.0f;
+    if (sy_raw > 1.0f) sy_raw = 1.0f;
+    *sx = sx_raw;
+    *sy = sy_raw;
 }
 
 void ModsParticles_Draw(void) {
@@ -6133,7 +6138,7 @@ void ModsParticles_Draw(void) {
 
     firstVert = gsVertCount;
 
-    /* Agregar 4 vértices por partícula (cuadrado pequeño) */
+    /* Agregar 4 vértices por partícula (cuadrado pequeño, siempre de cara a la cámara) */
     for (i = 0; i < MODS_PARTICLES_MAX; i++) {
         ModsParticle *p = &sModsParticles[i];
         if (!p->active) {
@@ -6142,13 +6147,16 @@ void ModsParticles_Draw(void) {
 
         float sx, sy;
         float size = p->size * 0.5f;
-        /* Alpha basado en vida: destellos y chispas más intensos al inicio */
-        uint8_t alpha = (uint8_t)(p->life * 200);
+        /* Alpha basado en vida: cada tipo tiene su intensidad */
+        uint8_t alpha;
         if (p->type == MODS_PARTICLE_FLASH) {
-            alpha = (uint8_t)(p->life * 255); /* destello más brillante */
-        }
-        if (p->type == MODS_PARTICLE_SPARK) {
-            alpha = (uint8_t)(p->life * 220);
+            alpha = (uint8_t)(p->life * 240);
+        } else if (p->type == MODS_PARTICLE_SPARK) {
+            alpha = (uint8_t)(p->life * 200);
+        } else if (p->type == MODS_PARTICLE_BUBBLE) {
+            alpha = (uint8_t)(p->life * 160);
+        } else {
+            alpha = (uint8_t)(p->life * 140);
         }
 
         particle_project(p->x, p->y, p->z, &sx, &sy);
@@ -6173,9 +6181,8 @@ void ModsParticles_Draw(void) {
         d.target = GsDraw_TargetGet((uint32_t)gGsMainFbp, 1);
         d.first = firstVert;
         d.count = numVerts;
-        d.pipeline = pipeline_get(0, 0, 0, 0);
+        d.pipeline = pipeline_get(0, 0, 0, 1);
         d.object = sPresentationObject;
         gsDraws[gsDrawCount++] = d;
     }
 }
-
