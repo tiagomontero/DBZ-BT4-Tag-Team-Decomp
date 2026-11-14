@@ -6097,10 +6097,7 @@ void GsGpu_FrameEnd(void) {
     skip_decide();
 }
 
-/* ----------------------------------------------------------------- Partículas de mods (burbujas de soda) */
-/* Proyección 3D a 2D muy simple: asume que el personaje está cerca del centro de la pantalla.
-   No es una proyección real de cámara, pero sirve para ver las burbujas flotando. */
-static void /* ----------------------------------------------------------------- Partículas de mods (burbujas de soda, chispas, polvo, destellos) */
+/* ----------------------------------------------------------------- Partículas de mods (burbujas de soda, chispas, polvo, destellos) */
 /* Proyección 3D a 2D simple: convierte coordenadas del mundo a coordenadas de pantalla normalizadas (0..1).
    Usa una aproximación de cámara desde el frente para que las partículas se vean en el lugar correcto. */
 static void particle_project(float x, float y, float z, float *sx, float *sy) {
