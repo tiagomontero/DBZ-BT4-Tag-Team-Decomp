@@ -17,8 +17,11 @@ RUN apt-get update && apt-get update && apt-get install -y --no-install-recommen
 RUN curl -fsSL -o /tmp/llvm.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.6/clang+llvm-23.1.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz \
     && tar -xJf /tmp/llvm.tar.xz -C /usr/local --strip-components=1 \
     && rm -rf /tmp/llvm.tar.xz \
-    && ln -sf /usr/local/bin/clang-23 /usr/local/bin/clang 2>/dev/null || true \
-    && ln -sf /usr/local/bin/llc-23 /usr/local/bin/llc 2>/dev/null || true
+    && ln -sf /usr/local/bin/clang-23 /usr/bin/clang \
+    && ln -sf /usr/local/bin/clang++-23 /usr/bin/clang++ \
+    && ln -sf /usr/local/bin/llc-23 /usr/bin/llc \
+    && ln -sf /usr/local/bin/ld.lld-23 /usr/bin/ld.lld \
+    && clang-23 --version && llc-23 --version
 # SDL3 from source, for any x86-64 CPU; this is also the copy the release carries in lib/
 ARG SDL_VERSION=3.4.12
 RUN curl -fsSL -o /tmp/sdl.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL3-${SDL_VERSION}.tar.gz \
