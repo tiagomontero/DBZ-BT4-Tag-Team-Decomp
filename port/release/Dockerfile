@@ -13,8 +13,12 @@ RUN apt-get update && apt-get update && apt-get install -y --no-install-recommen
         libibus-1.0-dev libusb-1.0-0-dev libssl-dev libopus-dev \
     && rm -rf /var/lib/apt/lists/*
 # clang / LLVM 23 (the version ptr32.py and irfix.py are written against), with its Python bindings
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    clang-23 llvm-23 libclang-23-dev python3-clang-23 \
+RUN echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-23 main" > /etc/apt/sources.list.d/llvm.list \
+    && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg \
+    && apt-get update && apt-get install -y --no-install-recommends clang-23 llvm-23 libclang-23-dev python3-clang-23 \
+    || (echo "apt.llvm.org failed, trying llvm.org" \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://llvm.org/jammy/ llvm-toolchain-jammy-23 main" > /etc/apt/sources.list.d/llvm.list \
+    && apt-get update && apt-get install -y --no-install-recommends clang-23 llvm-23 libclang-23-dev python3-clang-23) \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/clang-23 /usr/bin/clang \
     && ln -sf /usr/bin/clang++-23 /usr/bin/clang++ \
