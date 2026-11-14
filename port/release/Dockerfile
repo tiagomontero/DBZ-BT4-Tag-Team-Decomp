@@ -13,15 +13,17 @@ RUN apt-get update && apt-get update && apt-get install -y --no-install-recommen
         libibus-1.0-dev libusb-1.0-0-dev libssl-dev libopus-dev \
     && rm -rf /var/lib/apt/lists/*
 # clang / LLVM 23 (the version ptr32.py and irfix.py are written against), with its Python bindings
-# Usamos clang-14 de Ubuntu 22.04 repos (apt.llvm.org tiene problemas de DNS en CI)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    clang-14 llvm-14 libclang-14-dev python3-clang-14 \
+# Forzar DNS de apt.llvm.org (a veces no resuelve en GitHub Actions)
+RUN echo "140.248.150.49 apt.llvm.org" >> /etc/hosts \
+    && curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] http://apt.llvm.org/jammy/ llvm-toolchain-jammy-23 main" > /etc/apt/sources.list.d/llvm.list \
+    && apt-get update && apt-get install -y --no-install-recommends clang-23 llvm-23 libclang-23-dev python3-clang-23 \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/clang-14 /usr/bin/clang \
-    && ln -sf /usr/bin/clang++-14 /usr/bin/clang++ \
-    && ln -sf /usr/bin/llc-14 /usr/bin/llc \
-    && ln -sf /usr/bin/ld.lld-14 /usr/bin/ld.lld \
-    && clang-14 --version && llc-14 --version
+    && ln -sf /usr/bin/clang-23 /usr/bin/clang \
+    && ln -sf /usr/bin/clang++-23 /usr/bin/clang++ \
+    && ln -sf /usr/bin/llc-23 /usr/bin/llc \
+    && ln -sf /usr/bin/ld.lld-23 /usr/bin/ld.lld \
+    && clang-23 --version && llc-23 --version
 # SDL3 from source, for any x86-64 CPU; this is also the copy the release carries in lib/
 ARG SDL_VERSION=3.4.12
 RUN curl -fsSL -o /tmp/sdl.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL3-${SDL_VERSION}.tar.gz \
