@@ -2,7 +2,7 @@ return {
     name = "Free look",
     version = "5.0",
     author = "BT4decomp",
-    description = "Camara detras del personaje. Mouse orbita, rueda hace zoom, camara sigue al personaje.",
+    description = "Cámara detrás del personaje. Mouse orbita, rueda zoom.",
     settings = {
         { id = "enable", label = "Activar free look", type = "toggle", default = 1 },
         { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 5, max = 300, step = 5, default = 100 },
@@ -39,7 +39,7 @@ return {
         local dy = m.dy or 0
         local scroll = m.scroll or 0
 
-        -- Estado persistente por lado
+        -- Estado persistente
         if not s_yaw then s_yaw = pyaw end
         if not s_pitch then s_pitch = -pi / 4 end
         if not s_dist then s_dist = bt3.setting("dist") end
@@ -52,7 +52,7 @@ return {
         elseif scroll < 0 then s.dist = s.dist + zstep end
         s.dist = clamp(s.dist, 200, 1500)
 
-        -- Camara DETRAS del personaje
+        -- Cámara detrás del personaje
         local tyaw = wrap(pyaw + pi + s_yaw)
         local tpitch = s_pitch
 
@@ -60,7 +60,7 @@ return {
         local cy = py - (bt3.setting("height") or 250)
         local cz = pz + s.dist * math.cos(tpitch) * math.cos(tyaw)
 
-        -- Solo modificar pos y target, NO tocar rot para evitar crasheos
+        -- Solo modificar posición y objetivo, NO tocar cam.rot
         cam.pos[1] = cx
         cam.pos[2] = cy
         cam.pos[3] = cz
@@ -68,7 +68,6 @@ return {
         cam.target[2] = py
         cam.target[3] = pz
 
-        -- Decirle a C el yaw para que WASD gire con la vista
         bt3.set_free_look_yaw(tyaw)
     end,
 }
