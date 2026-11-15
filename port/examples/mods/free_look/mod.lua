@@ -1,10 +1,5 @@
--- Free look v2.1: cámara siempre DETRÁS del personaje, sigue cuando se mueve.
---   - Mover el mouse: orbita la vista alrededor del personaje (yaw/pitch)
---   - Clic izquierdo: recentra directamente detrás del personaje
---   - Rueda del mouse: acerca / aleja la cámara (zoom)
---   - WASD / stick: el personaje se mueve y la cámara lo sigue
---   - Sin mouse por N segundos: vuelve suavemente a la cámara del juego
--- Los ataques siguen yendo al rival; el mouse solo cambia la vista.
+-- Free look v3.0 - Camara detras del personaje, orbita con el mouse
+-- Funciona solo con cam.pos y cam.target (sin tocar cam.rot para evitar crasheos)
 
 local pi = math.pi
 local function clamp(v, a, b) return v < a and a or v > b and b or v end
@@ -14,30 +9,19 @@ local function wrap(a)
     return a
 end
 
-local sides = { {}, {} }
-
-local function reset(c, dist_default)
-    c.yaw = 0            -- offset de orbita del mouse (0 = directamente detrás)
-    c.pitch = 0          -- offset de inclinación del mouse
-    c.dist = dist_default
-    c.lastMove = nil
-end
+local state = {}
 
 return {
     name = "Free look",
-    version = "2.1",
+    version = "3.0",
     author = "BT4decomp",
-    description = "Cámara siempre detrás del personaje. Orbita con el mouse, sigue al personaje cuando se mueve.",
+    description = "Camara detras del personaje. Mouse orbita, rueda zoom, camara sigue al personaje.",
     settings = {
         { id = "enable", label = "Activar free look", type = "toggle", default = 1 },
-        { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 10, max = 500, step = 5, default = 150 },
-        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 500 },
-        { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 700, step = 25, default = 220 },
-        { id = "invert_y", label = "Invertir eje vertical", type = "toggle", default = 0 },
-        { id = "pitch_min", label = "Pitch mínimo (deg)", type = "slider", min = -90, max = 0, step = 5, default = -75 },
-        { id = "pitch_max", label = "Pitch máximo (deg)", type = "slider", min = 0, max = 90, step = 5, default = 60 },
-        { id = "zoom_step", label = "Zoom por rueda", type = "slider", min = 5, max = 100, step = 5, default = 40 },
-        { id = "recenter", label = "Recentrar automático tras (s)", type = "slider", min = 0, max = 10, step = 0.5, default = 3, tip = "0: nunca" },
+        { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 10, max = 200, step = 5, default = 80 },
+        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1200, step = 25, default = 450 },
+        { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 600, step = 25, default = 200 },
+        { id = "zoom_step", label = "Zoom por rueda", type = "slider", min = 10, max = 100, step = 5, default = 40 },
     },
     on_camera = function(cam, game)
         if not game.battle or not bt3.setting("enable") then
@@ -49,11 +33,11 @@ return {
             return
         end
 
-        local c = sides[cam.side]
-        if not c then c = {} sides[cam.side] = c end
-        if c.dist == nil then c.dist = bt3.setting("dist") end
+        local s = state[cam.side]
+        if not s then s = {} state[cam.side] = s end
+        if s.dist == nil then s.dist = bt3.setting("dist") end
 
-        -- Elegir personaje activo (pivote): lado 0, si no lado 1
+        -- Elegir personaje activo
         local p = nil
         if game.f then
             p = game.f[0]
@@ -64,73 +48,44 @@ return {
             return
         end
 
-        -- p.pos es tabla {1=x, 2=y, 3=z}; p.yaw es número
         local px, py, pz = p.pos[1], p.pos[2], p.pos[3]
         local pyaw = p.yaw or 0
 
-        local sens = bt3.setting("sens") * 0.0005
-        local inv = bt3.setting("invert_y") and -1 or 1
-        local pmin = bt3.setting("pitch_min") * pi / 180
-        local pmax = bt3.setting("pitch_max") * pi / 180
-        local auto = bt3.setting("recenter")
-        local zoom = bt3.setting("zoom_step")
-        local height = bt3.setting("height")
-        local dist_default = bt3.setting("dist")
+        local sens = bt3.setting("sens") * 0.0004
+        local local_yaw = bt3.setting("pitch_min") and bt3.setting("pitch_min") * pi / 180 or -pi / 4
+        local local_pitch = bt3.setting("pitch_max") and bt3.setting("pitch_max") * pi / 180 or pi / 6
 
         local m = game.mouse or {}
         local dx = m.dx or 0
         local dy = m.dy or 0
         local scroll = m.scroll or 0
-        local left = m.left or false
 
         -- Acumular offset del mouse
-        c.yaw = wrap((c.yaw or 0) + dx * sens)
-        c.pitch = clamp((c.pitch or 0) - dy * sens * inv, pmin, pmax)
+        s.yaw = wrap((s.yaw or 0) + dx * sens)
+        s.pitch = clamp((s.pitch or -pi / 4) - dy * sens, -pi / 2 + 0.1, pi / 2 - 0.1)
 
         -- Zoom con rueda
-        if scroll > 0 then c.dist = c.dist - zoom
-        elseif scroll < 0 then c.dist = c.dist + zoom end
-        c.dist = clamp(c.dist, dist_default, 1500)
+        local zstep = bt3.setting("zoom_step") or 40
+        if scroll > 0 then s.dist = s.dist - zstep
+        elseif scroll < 0 then s.dist = s.dist + zstep end
+        s.dist = clamp(s.dist, 200, 1200)
 
-        local now = game.time or 0
-        if left then
-            reset(c, dist_default)
-        elseif dx ~= 0 or dy ~= 0 then
-            c.lastMove = now
-        end
+        -- Camara DETRAS del personaje
+        local tyaw = wrap(pyaw + pi + s.yaw)
+        local tpitch = s.pitch
 
-        -- Auto-recentrado suave tras `auto` segundos sin movimiento
-        if auto > 0 and c.lastMove and now - c.lastMove > auto then
-            local k = 0.15
-            c.yaw = c.yaw * (1 - k)
-            c.pitch = c.pitch * (1 - k)
-            c.dist = c.dist + (dist_default - c.dist) * k
-        end
+        local cx = px + s.dist * math.cos(tpitch) * math.sin(tyaw)
+        local cy = py - (bt3.setting("height") or 200)
+        local cz = pz + s.dist * math.cos(tpitch) * math.cos(tyaw)
 
-        -- La cámara está siempre DETRÁS del personaje:
-        -- p.yaw + pi = 180 grados detrás del personaje (donde mira)
-        -- c.yaw = offset extra del mouse para orbita
-        local total_yaw = wrap(pyaw + pi + c.yaw)
-        local total_pitch = c.pitch
-
-        -- Posición orbital alrededor del personaje (pivote = centro del personaje)
-        -- +Y es hacia abajo en este juego, elevar = restar en Y
-        local cx = px + c.dist * math.cos(total_pitch) * math.sin(total_yaw)
-        local cy = py - height
-        local cz = pz + c.dist * math.cos(total_pitch) * math.cos(total_yaw)
-
-        -- Modificar cámara en su lugar (la tabla cam se pasa por referencia)
         cam.pos[1] = cx
         cam.pos[2] = cy
         cam.pos[3] = cz
         cam.target[1] = px
         cam.target[2] = py
         cam.target[3] = pz
-        cam.rot[1] = total_pitch
-        cam.rot[2] = total_yaw
-        cam.rot[3] = 0
 
-        -- Decirle a C el yaw para que WASD / el stick gire con la vista
-        bt3.set_free_look_yaw(total_yaw)
+        -- Solo el yaw para WASD, NO tocamos rot para evitar crasheos
+        bt3.set_free_look_yaw(tyaw)
     end,
 }

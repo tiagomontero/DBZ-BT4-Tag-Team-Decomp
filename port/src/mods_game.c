@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Script mods, the game's side (the scripts themselves: port/src/gs/mods.c; docs/port/mods.md). Once per blank on the
  * game's thread this file reads what the scripts are given of a fight beyond the gauges (fight_panels.c reads those):
  * where each fighter is. And it is where the camera hook in src/battle/btl_cam.c (BtlCam_UpdateView) comes in: the
@@ -22,7 +22,6 @@
 
 #include "gs/mods.h"
 #include "port_addr.h"
-#include "gs/mods_particles.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && defined(__clang__)
 #undef __ptr32 /* the Windows headers of mingw define these two away */
@@ -49,7 +48,6 @@ extern int BtlAct_GetCurrent(void GAME_PTR chr);
 /* gs/ui.h declares this, but it also pulls in SDL3's headers, which only the files under gs/ are built with; and
    the values come back through pointers, not as a float return, because this file is built without the FPU. */
 extern void PortInput_MouseRead(float *dx, float *dy, int *left, float *scroll);
-extern int Port_Rand(void);
 
 int PortMods_ViewActor(int side) {
     int own,target,count;
@@ -109,8 +107,8 @@ static int sChargeTimer[BTL_OBJ_COUNT];       /* frames que lleva cargando ki es
 
 /* Expresiones de cara al cargar ki, por personaje (chara ID).
    Completa esta tabla con los IDs reales de cada personaje y la boca / ojos
-   que quieras que use mientras carga ki. Si un personaje no está en la tabla,
-   se usa la expresión genérica (boca abierta + ojos serios). */
+   que quieras que use mientras carga ki. Si un personaje no estÃ¡ en la tabla,
+   se usa la expresiÃ³n genÃ©rica (boca abierta + ojos serios). */
 typedef struct { int chara; int mouth; int eye; } FaceExpr;
 static const FaceExpr sFaceExpr[] = {
     /* { chara_id, boca (BOBJ_MOUTH_*), ojos (frame) } */
@@ -169,10 +167,10 @@ void Port_ModsFaceGestures(int objId) {
             }
         }
         if (face_expr_for_chara(chara, &mouth, &eye)) {
-            /* expresión personalizada para este personaje */
+            /* expresiÃ³n personalizada para este personaje */
         }
-        /* Animación dinámica mientras carga ki: boca alterna entre expresión y forma intermedia,
-           ojos parpadean periódicamente. sChargeTimer cuenta frames de carga acumulada. */
+        /* AnimaciÃ³n dinÃ¡mica mientras carga ki: boca alterna entre expresiÃ³n y forma intermedia,
+           ojos parpadean periÃ³dicamente. sChargeTimer cuenta frames de carga acumulada. */
         sChargeTimer[objId]++;
         if ((sChargeTimer[objId] / 6) % 2 == 0) {
             /* Boca principal (abierta o personalizada) */
@@ -180,14 +178,14 @@ void Port_ModsFaceGestures(int objId) {
                 BtlObj_SetSubState(obj, mouth, 0);
             }
         } else {
-            /* Boca intermedia (menos abierta) para dar sensación de esfuerzo */
+            /* Boca intermedia (menos abierta) para dar sensaciÃ³n de esfuerzo */
             if (BtlObj_GetMouthMode(obj) != BOBJ_MOUTH_SHAPE_1) {
                 BtlObj_SetSubState(obj, BOBJ_MOUTH_SHAPE_1, 0);
             }
         }
         eyes = *(uint32_t GAME_PTR)(obj + BOBJ_EYES); /* (the eye table's game address, 0: no eyes) */
         if (eyes != 0 && *(const uint32_t *)Port_Ptr(eyes) >= eye) { /* (its first word: how many) */
-            /* Parpadeo de ojos cada 15 frames: alternar entre expresión y parpadeo (9) */
+            /* Parpadeo de ojos cada 15 frames: alternar entre expresiÃ³n y parpadeo (9) */
             if ((sChargeTimer[objId] / 15) % 2 == 0) {
                 BtlObj_SetEyeFrame(obj, eye);
             } else {
@@ -197,7 +195,7 @@ void Port_ModsFaceGestures(int objId) {
         sFaceOwn[objId] = 1;
         return;
     }
-    /* Ya no carga ki: devolver la cara al reposo sin gesto de expulsión de ki. */
+    /* Ya no carga ki: devolver la cara al reposo sin gesto de expulsiÃ³n de ki. */
     if (!sFaceOwn[objId]) {
         return;
     }
@@ -261,9 +259,6 @@ void Port_NaturalFightCamera(int objId,int pos,int rot) {
 void PortMods_GameTick(void) {
     int side;
     uint8_t GAME_PTR chr;
-    static int particleTimer[2] = {0, 0};
-    const ModsLook *look = Mods_Look();
-    int particleIntensity = look ? look->particles : 0;
 
     if (gPortResim) {
         return;
@@ -277,43 +272,12 @@ void PortMods_GameTick(void) {
                 rdf(sGame.f[side].pos, chr, CHR_POSE, 3);
                 rdf(&sGame.f[side].yaw, chr, CHR_POSE + POSE_YAW, 1);
                 sGame.f[side].action = BtlAct_GetCurrent(chr);
-                /* Generar partículas al cargar ki (acción 0x37) */
-                if (sGame.f[side].action == 0x37 && particleIntensity > 0) {
-                    particleTimer[side]++;
-                    /* Más partículas si el slider es mayor (1-4 partículas por ciclo) */
-                    int particlesToEmit = 1 + particleIntensity / 25; /* 1..5 */
-                    int i;
-                    for (i = 0; i < particlesToEmit; i++) {
-                        /* Posición aleatoria cerca del personaje (altura de cabeza/hombros) */
-                        float bx = sGame.f[side].pos[0] + ((float)(Port_Rand() % 100) - 50.0f) * 0.2f;
-                        float by = sGame.f[side].pos[1] + 30.0f + ((float)(Port_Rand() % 40) * 0.5f);
-                        float bz = sGame.f[side].pos[2] + ((float)(Port_Rand() % 100) - 50.0f) * 0.2f;
-                        /* Elegir tipo de partícula al azar con probabilidades diferentes */
-                        int ptype = Port_Rand() % 100;
-                        if (ptype < 40) { /* 40% burbujas */
-                            ModsParticles_Add(MODS_PARTICLE_BUBBLE, bx, by, bz,
-                                4.0f + (float)(Port_Rand() % 8) * 1.0f, 0.5f, 0.8f, 1.0f);
-                        } else if (ptype < 70) { /* 30% chispas */
-                            ModsParticles_Add(MODS_PARTICLE_SPARK, bx, by, bz,
-                                2.0f + (float)(Port_Rand() % 5) * 1.0f, 1.0f, 0.9f, 0.3f);
-                        } else if (ptype < 85) { /* 15% polvo */
-                            ModsParticles_Add(MODS_PARTICLE_DUST, bx, by, bz,
-                                3.0f + (float)(Port_Rand() % 5) * 1.0f, 0.7f, 0.7f, 0.7f);
-                        } else { /* 15% destellos */
-                            ModsParticles_Add(MODS_PARTICLE_FLASH, bx, by, bz,
-                                6.0f + (float)(Port_Rand() % 6) * 2.0f, 1.0f, 1.0f, 0.7f);
-                        }
-                    }
-                } else {
-                    particleTimer[side] = 0;
-                }
             }
         }
         sGame.battle = sGame.f[0].found && sGame.f[1].found;
         sGame.split = sGame.battle && Battle_IsSplitScreen();
     } else { memset(sNatural,0,sizeof(sNatural)); memset(sPausedCamera,0,sizeof(sPausedCamera)); }
     PortInput_MouseRead(&sGame.mouseDx,&sGame.mouseDy,&sGame.mouseLeft,&sGame.mouseScroll);
-    ModsParticles_Update();
     Mods_Tick();
 }
 
@@ -393,89 +357,6 @@ void Port_ModsCamera(int side, int objId, int pos, int rot, int paused) {
         wra((uint32_t)rot, sCam.rot, 3);
         sZoom[side] = (int)(sCam.zoom * 1000.0f + 0.5f);
         sCollide[side] = sCam.collide;
-    }
-}
-
-/* ----------------------------------------------------------------- Partículas de mods (burbujas de soda) */
-
-ModsParticle sModsParticles[MODS_PARTICLES_MAX];
-
-void ModsParticles_Add(int type, float x, float y, float z, float size, float r, float g, float b) {
-    int i;
-    for (i = 0; i < MODS_PARTICLES_MAX; i++) {
-        if (!sModsParticles[i].active) {
-            sModsParticles[i].active = 1;
-            sModsParticles[i].type = type;
-            sModsParticles[i].x = x;
-            sModsParticles[i].y = y;
-            sModsParticles[i].z = z;
-            sModsParticles[i].r = r;
-            sModsParticles[i].g = g;
-            sModsParticles[i].b = b;
-            sModsParticles[i].size = size;
-            sModsParticles[i].life = 1.0f;
-            /* Velocidad inicial según el tipo de partícula */
-            switch (type) {
-                case MODS_PARTICLE_BUBBLE:
-                    /* Burbuja: sube lento, drift lateral suave */
-                    sModsParticles[i].vx = ((float)(Port_Rand() % 100) - 50.0f) * 0.03f;
-                    sModsParticles[i].vy = 1.5f + (float)(Port_Rand() % 30) * 0.05f;
-                    sModsParticles[i].vz = ((float)(Port_Rand() % 100) - 50.0f) * 0.03f;
-                    sModsParticles[i].vy += 0.05f; /* ligera aceleración hacia arriba */
-                    break;
-                case MODS_PARTICLE_SPARK:
-                    /* Chispa: sale rápido en todas direcciones, cae por gravedad */
-                    sModsParticles[i].vx = ((float)(Port_Rand() % 200) - 100.0f) * 0.15f;
-                    sModsParticles[i].vy = ((float)(Port_Rand() % 100) - 50.0f) * 0.15f;
-                    sModsParticles[i].vz = ((float)(Port_Rand() % 200) - 100.0f) * 0.15f;
-                    break;
-                case MODS_PARTICLE_DUST:
-                    /* Polvo: cae lento, drift lento */
-                    sModsParticles[i].vx = ((float)(Port_Rand() % 100) - 50.0f) * 0.02f;
-                    sModsParticles[i].vy = -1.0f + (float)(Port_Rand() % 20) * 0.05f; /* cae */
-                    sModsParticles[i].vz = ((float)(Port_Rand() % 100) - 50.0f) * 0.02f;
-                    break;
-                case MODS_PARTICLE_FLASH:
-                    /* Destello: casi no se mueve, se apaga rápido */
-                    sModsParticles[i].vx = ((float)(Port_Rand() % 40) - 20.0f) * 0.02f;
-                    sModsParticles[i].vy = ((float)(Port_Rand() % 40) - 20.0f) * 0.02f;
-                    sModsParticles[i].vz = ((float)(Port_Rand() % 40) - 20.0f) * 0.02f;
-                    break;
-            }
-            return;
-        }
-    }
-}
-
-void ModsParticles_Update(void) {
-    int i;
-    for (i = 0; i < MODS_PARTICLES_MAX; i++) {
-        ModsParticle *p = &sModsParticles[i];
-        if (!p->active) {
-            continue;
-        }
-        p->x += p->vx;
-        p->y += p->vy;
-        p->z += p->vz;
-        /* Gravedad y aceleración según el tipo */
-        switch (p->type) {
-            case MODS_PARTICLE_BUBBLE:
-                p->vy += 0.05f; /* burbujas suben */
-                break;
-            case MODS_PARTICLE_SPARK:
-                p->vy += 0.15f; /* chispas caen rápido por gravedad */
-                break;
-            case MODS_PARTICLE_DUST:
-                p->vy += 0.08f; /* polvo cae lento */
-                break;
-            case MODS_PARTICLE_FLASH:
-                /* destellos casi no se mueven, solo se desvanecen */
-                break;
-        }
-        p->life -= 0.02f; /* ~50 frames de vida */
-        if (p->life <= 0.0f) {
-            p->active = 0;
-        }
     }
 }
 
