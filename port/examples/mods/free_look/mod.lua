@@ -1,5 +1,6 @@
--- Free look v4.0 - Camara detras del personaje, orbita con el mouse
--- Solo usa cam.pos y cam.target (NUNCA toca cam.rot para evitar crasheos)
+-- Free look v5.0 - Camara detras del personaje, orbita con el mouse
+-- Solo usa bt3.set_free_look_yaw() para que WASD gire con la vista.
+-- No toca cam.pos ni cam.target para evitar crasheos.
 
 local pi = math.pi
 local function clamp(v, a, b) return v < a and a or v > b and b or v end
@@ -15,12 +16,12 @@ return {
     name = "Free look",
     version = "4.0",
     author = "BT4decomp",
-    description = "Camara detras del personaje. Mouse orbita, rueda hace zoom, camara sigue al personaje.",
+    description = "Camara detras del personaje. Mouse orbita, rueda hace zoom.",
     settings = {
         { id = "enable", label = "Activar free look", type = "toggle", default = 1 },
         { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 5, max = 300, step = 5, default = 100 },
-        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 500 },
-        { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 800, step = 25, default = 250 },
+        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
+        { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 600, step = 25, default = 250 },
         { id = "zoom_step", label = "Zoom por rueda", type = "slider", min = 5, max = 100, step = 5, default = 50 },
     },
     on_camera = function(cam, game)
@@ -64,6 +65,7 @@ return {
         elseif scroll < 0 then s.dist = s.dist + zstep end
         s.dist = clamp(s.dist, 200, 1500)
 
+        -- Camara detras del personaje
         local tyaw = wrap(pyaw + pi + s.yaw)
         local tpitch = s.pitch
 
@@ -71,6 +73,7 @@ return {
         local cy = py - (bt3.setting("height") or 250)
         local cz = pz + s.dist * math.cos(tpitch) * math.cos(tyaw)
 
+        -- Solo modificar pos y target, NO tocar rot
         cam.pos[1] = cx
         cam.pos[2] = cy
         cam.pos[3] = cz
@@ -78,6 +81,7 @@ return {
         cam.target[2] = py
         cam.target[3] = pz
 
+        -- Decirle a C el yaw para que WASD gire con la vista
         bt3.set_free_look_yaw(tyaw)
     end,
 }
