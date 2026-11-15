@@ -1,5 +1,5 @@
 -- Free look v3.0 - Camara detras del personaje, orbita con el mouse
--- Funciona solo con cam.pos y cam.target (sin tocar cam.rot para evitar crasheos)
+-- Solo usa cam.pos y cam.target (sin tocar cam.rot para evitar crasheos)
 
 local pi = math.pi
 local function clamp(v, a, b) return v < a and a or v > b and b or v end
@@ -37,7 +37,6 @@ return {
         if not s then s = {} state[cam.side] = s end
         if s.dist == nil then s.dist = bt3.setting("dist") end
 
-        -- Elegir personaje activo
         local p = nil
         if game.f then
             p = game.f[0]
@@ -52,9 +51,6 @@ return {
         local pyaw = p.yaw or 0
 
         local sens = bt3.setting("sens") * 0.0004
-        local local_yaw = bt3.setting("pitch_min") and bt3.setting("pitch_min") * pi / 180 or -pi / 4
-        local local_pitch = bt3.setting("pitch_max") and bt3.setting("pitch_max") * pi / 180 or pi / 6
-
         local m = game.mouse or {}
         local dx = m.dx or 0
         local dy = m.dy or 0
@@ -85,7 +81,7 @@ return {
         cam.target[2] = py
         cam.target[3] = pz
 
-        -- Solo el yaw para WASD, NO tocamos rot para evitar crasheos
+        -- Solo el yaw para WASD, NO tocamos cam.rot para evitar crasheos
         bt3.set_free_look_yaw(tyaw)
     end,
 }

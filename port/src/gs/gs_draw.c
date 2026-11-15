@@ -33,7 +33,6 @@
 #include "../../include/port_render_markers.h"
 #include "menu_wide_layout.h"
 #include "menu_panel_layout.h"
-#include "mods_particles.h"
 static uint32_t sPresentationObject;
 #include "ui.h"         /* PortVideo and the window helpers */
 #include "gs_texpack.h" /* texture packs (replacement textures) */
@@ -6077,8 +6076,6 @@ void GsGpu_FrameEnd(void) {
                 }
             }
             t1 = gpu_now();
-            /* Dibujar partículas de mods (burbujas de soda al cargar ki) */
-            ModsParticles_Draw();
             sBackend->frameEnd();
             interp_cost(gpu_now() - t1);
             interp_present_log('S');
