@@ -1,13 +1,22 @@
+-- Funciones helper (deben ir antes del return)
+local pi = math.pi
+local function clamp_angle(v, a, b) return v < a and a or v > b and b or v end
+local function wrap_angle(a)
+    while a > pi do a = a - 2 * pi end
+    while a < -pi do a = a + 2 * pi end
+    return a
+end
+
 return {
     name = "Free look",
     version = "5.0",
     author = "BT4decomp",
-    description = "Cámara libre con el mouse. Orbita alrededor del personaje, rueda hace zoom.",
+    description = "Cámara libre con el mouse. Orbita alrededor del personaje.",
     settings = {
         { id = "enable", label = "Activar", type = "toggle", default = 1 },
         { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 5, max = 500, step = 5, default = 100 },
-        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
-        { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 800, step = 25, default = 250 },
+        { id = "dist", label = "Distancia", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
+        { id = "height", label = "Altura", type = "slider", min = 0, max = 800, step = 25, default = 250 },
         { id = "zoom_step", label = "Zoom por rueda", type = "slider", min = 5, max = 100, step = 5, default = 50 },
     },
     on_camera = function(cam, game)
@@ -33,7 +42,6 @@ return {
         local px, py, pz = p.pos[1], p.pos[2], p.pos[3]
         local pyaw = p.yaw or 0
 
-        local pi = math.pi
         local sens = bt3.setting("sens") * 0.0005
         local m = game.mouse or {}
         local dx = m.dx or 0
@@ -68,11 +76,3 @@ return {
         bt3.set_free_look_yaw(tyaw)
     end,
 }
-
-function clamp_angle(v, a, b) return v < a and a or v > b and b or v end
-function wrap_angle(a)
-    local pi = math.pi
-    while a > pi do a = a - 2 * pi end
-    while a < -pi do a = a + 2 * pi end
-    return a
-end
