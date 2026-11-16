@@ -1,3 +1,12 @@
+-- Funciones helper (deben ir antes del return)
+local pi = math.pi
+local function clamp_angle(v, a, b) return v < a and a or v > b and b or v end
+local function wrap_angle(a)
+    while a > pi do a = a - 2 * pi end
+    while a < -pi do a = a + 2 * pi end
+    return a
+end
+
 return {
     name = "Free look",
     version = "5.0",
@@ -33,7 +42,6 @@ return {
         local px, py, pz = p.pos[1], p.pos[2], p.pos[3]
         local pyaw = p.yaw or 0
 
-        local pi = math.pi
         local sens = bt3.setting("sens") * 0.0005
         local m = game.mouse or {}
         local dx = m.dx or 0
@@ -52,7 +60,7 @@ return {
         elseif scroll < 0 then s.dist = s.dist + zstep end
         s.dist = clamp_angle(s.dist, 200, 1500)
 
-        local tyaw = wrap_angle(pyaw + math.pi + s_yaw)
+        local tyaw = wrap_angle(pyaw + pi + s_yaw)
 
         local cx = px + s.dist * math.cos(s_pitch) * math.sin(tyaw)
         local cy = py - (bt3.setting("height") or 250)
@@ -68,11 +76,3 @@ return {
         bt3.set_free_look_yaw(tyaw)
     end,
 }
-
-function clamp_angle(v, a, b) return v < a and a or v > b and b or v end
-function wrap_angle(a)
-    local pi = math.pi
-    while a > pi do a = a - 2 * pi end
-    while a < -pi do a = a + 2 * pi end
-    return a
-end
