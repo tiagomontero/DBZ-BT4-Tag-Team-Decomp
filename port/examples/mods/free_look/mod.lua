@@ -1,4 +1,6 @@
--- Funciones helper (deben ir antes del return)
+-- Free look v5.1 - Cámara libre con el mouse. Orbita alrededor del personaje.
+-- Las funciones helper deben ir ANTES del return para que Lua las lea primero.
+
 local pi = math.pi
 local function clamp_angle(v, a, b) return v < a and a or v > b and b or v end
 local function wrap_angle(a)
@@ -15,8 +17,8 @@ return {
     settings = {
         { id = "enable", label = "Activar", type = "toggle", default = 1 },
         { id = "sens", label = "Sensibilidad mouse", type = "slider", min = 5, max = 500, step = 5, default = 100 },
-        { id = "dist", label = "Distancia", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
-        { id = "height", label = "Altura", type = "slider", min = 0, max = 800, step = 25, default = 250 },
+        { id = "dist", label = "Distancia al personaje", type = "slider", min = 200, max = 1500, step = 25, default = 450 },
+        { id = "height", label = "Altura sobre el personaje", type = "slider", min = 0, max = 800, step = 25, default = 250 },
         { id = "zoom_step", label = "Zoom por rueda", type = "slider", min = 5, max = 100, step = 5, default = 50 },
     },
     on_camera = function(cam, game)
